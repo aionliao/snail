@@ -1,9 +1,10 @@
 package main
 
-import (
-	"log"
-)
+import "github.com/kataras/iris"
 
 func main() {
-	log.Println("sss")
+	iris.Get("/", func(ctx *iris.Context) {
+		ctx.Write("Hello, %s", "World!")
+	})
+	iris.Listen(":8080")
 }
