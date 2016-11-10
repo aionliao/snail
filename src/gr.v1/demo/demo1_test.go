@@ -1,13 +1,13 @@
 package demo
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestDemo1(t *testing.T) {
+	at := assert.New(t)
 	d := &Demo1{}
-	t.Log(d.myDo())
-}
-
-func TestDemo2(t *testing.T) {
-	d := &Demo1{}
-	t.Log(d.myDo())
+	at.Equal(d.myDo(), 1)
 }
