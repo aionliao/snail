@@ -2,9 +2,6 @@ language: go
 go:
   - 1.7
 sudo: false
-before_script:
-  - cd ..
-  - export QBOXROOT=`pwd`
 script:
 ## gr
   - cd $TRAVIS_BUILD_DIR
