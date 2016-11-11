@@ -1,7 +1,5 @@
 package flv
 
-import "io"
-
 const (
 	TAG_AUDIO      = 8
 	TAG_VIDEO      = 9
@@ -46,5 +44,4 @@ const (
 
 type Demuxer interface {
 	Demux([]byte, uint8) (tag Tag, err error)
-	DemuxWithWriter([]byte, uint8, io.Writer) (tag Tag, err error)
 }

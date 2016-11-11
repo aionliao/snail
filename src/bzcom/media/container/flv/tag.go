@@ -125,6 +125,7 @@ func (self *Tag) parseAudioHeader(b []byte) (n int, err error) {
 func (self *Tag) parseVideoHeader(b []byte) (n int, err error) {
 	if len(b) < n+5 {
 		err = fmt.Errorf("invalid videodata len=%d", len(b))
+		return
 	}
 	flags := b[0]
 	self.MT.FrameType = flags >> 4
