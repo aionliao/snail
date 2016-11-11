@@ -97,7 +97,7 @@ func (self *Demuxer) adts(src []byte, w io.Writer) error {
 
 func (self *Demuxer) SampleRate() int {
 	rate := 44100
-	if 0 <= self.cfgInfo.sampleRate && self.cfgInfo.sampleRate <= 12 {
+	if self.cfgInfo.sampleRate <= len(aacRates)-1 {
 		rate = aacRates[self.cfgInfo.sampleRate]
 	}
 	return rate

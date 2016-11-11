@@ -26,7 +26,7 @@ func (self *Demuxer) Demux(src []byte) error {
 		return errMp3DataInvalid
 	}
 	index := (src[2] >> 2) & 0x3
-	if 0 <= index && index <= 2 {
+	if index <= len(mp3Rates)-1 {
 		self.samplingFrequency = mp3Rates[index]
 		return nil
 	}
