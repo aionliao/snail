@@ -145,9 +145,10 @@ func (self *Demuxer) naluSize(src []byte) (int, error) {
 	if len(src) < naluBytesLen {
 		return 0, errors.New("nalusizedata invalid")
 	}
+	buf := src[:naluBytesLen]
 	size := int(0)
-	for i := 0; i < len(src); i++ {
-		size = size<<8 + int(src[i])
+	for i := 0; i < len(buf); i++ {
+		size = size<<8 + int(buf[i])
 	}
 	return size, nil
 }
@@ -175,7 +176,6 @@ func (self *Demuxer) getAnnexbH264(src []byte, w io.Writer) error {
 		}
 		index += naluBytesLen
 		dataSize -= naluBytesLen
-
 		if dataSize >= nalLen && len(src[index:]) >= nalLen && nalLen > 0 {
 			self.setNaluHeader(src[index-naluBytesLen : index])
 			nalType := src[index] & 0x1f
@@ -220,10 +220,6 @@ func (self *Demuxer) getAnnexbH264(src []byte, w io.Writer) error {
 	return nil
 }
 
-func (self *Demuxer) SampleRate() int {
-	return 0
-}
-
 func (self *Demuxer) Demux(tag *flv.Tag, w io.Writer) (err error) {
 	switch tag.MT.AVCPacketType {
 	case flv.AVC_SEQHDR:
@@ -236,7 +232,7 @@ func (self *Demuxer) Demux(tag *flv.Tag, w io.Writer) (err error) {
 		if self.isNaluHeader(tag.Data[naluBytesLen:]) {
 			_, err = w.Write(tag.Data[naluBytesLen:])
 		} else {
-			err = self.getAnnexbH264(tag.Data, w)
+			err = self.getAnnexbH264(tag.Data[naluBytesLen:], w)
 		}
 	}
 	return
