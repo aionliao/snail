@@ -2,6 +2,7 @@ package codec
 
 import (
 	"bzcom/media/codec/aac"
+	"bzcom/media/codec/avc"
 	"bzcom/media/codec/mp3"
 	"bzcom/media/container/flv"
 	"errors"
@@ -13,8 +14,9 @@ var (
 )
 
 type codecDemuxer struct {
-	aacDemuxer *aac.Demuxer
-	mp3Demuxer *mp3.Demuxer
+	aacDemuxer  *aac.Demuxer
+	mp3Demuxer  *mp3.Demuxer
+	h264Demuxer *avc.Demuxer
 }
 
 func newCodecDemuxer() *codecDemuxer {
@@ -35,7 +37,10 @@ func (self *codecDemuxer) Demux(tag *flv.Tag, w io.Writer) (err error) {
 	switch tag.FT.Type {
 	case flv.TAG_VIDEO:
 		if tag.MT.CodecID == flv.VIDEO_H264 {
-
+			if self.h264Demuxer == nil {
+				self.h264Demuxer = avc.NewDemuxer()
+			}
+			err = self.h264Demuxer.Demux(tag, w)
 		}
 	case flv.TAG_AUDIO:
 		if tag.MT.SoundFormat == flv.SOUND_AAC {
