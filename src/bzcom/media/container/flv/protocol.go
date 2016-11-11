@@ -42,6 +42,6 @@ const (
 	VIDEO_H264 = 7
 )
 
-type Demuxer interface {
+type FLVDemuxer interface {
 	Demux([]byte, uint8) (tag Tag, err error)
 }
