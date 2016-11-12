@@ -1,10 +1,10 @@
 package codec
 
 import (
-	"bzcom/media/codec/aac"
-	"bzcom/media/codec/avc"
-	"bzcom/media/codec/mp3"
-	"bzcom/media/container/flv"
+	"bzcom/biubiu/media/libs/codec/aac"
+	"bzcom/biubiu/media/libs/codec/h264"
+	"bzcom/biubiu/media/libs/codec/mp3"
+	"bzcom/biubiu/media/libs/container/flv"
 	"errors"
 	"io"
 )
@@ -16,7 +16,7 @@ var (
 type codecDemuxer struct {
 	aacDemuxer  *aac.Demuxer
 	mp3Demuxer  *mp3.Demuxer
-	h264Demuxer *avc.Demuxer
+	h264Demuxer *h264.Demuxer
 }
 
 func newCodecDemuxer() *codecDemuxer {
@@ -38,7 +38,7 @@ func (self *codecDemuxer) Demux(tag *flv.Tag, w io.Writer) (err error) {
 	case flv.TAG_VIDEO:
 		if tag.MT.CodecID == flv.VIDEO_H264 {
 			if self.h264Demuxer == nil {
-				self.h264Demuxer = avc.NewDemuxer()
+				self.h264Demuxer = h264.NewDemuxer()
 			}
 			err = self.h264Demuxer.Demux(tag, w)
 		}

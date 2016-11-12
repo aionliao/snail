@@ -1,7 +1,7 @@
 package ts
 
 import (
-	"bzcom/media/container/flv"
+	"bzcom/biubiu/media/libs/container/flv"
 	"io"
 )
 

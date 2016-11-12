@@ -1,8 +1,8 @@
-package avc
+package h264
 
 import (
 	"bytes"
-	"bzcom/media/container/flv"
+	"bzcom/biubiu/media/libs/container/flv"
 	"errors"
 	"testing"
 

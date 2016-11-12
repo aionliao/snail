@@ -1,7 +1,7 @@
 package codec
 
 import (
-	"bzcom/media/container/flv"
+	"bzcom/biubiu/media/libs/container/flv"
 	"io"
 )
 
