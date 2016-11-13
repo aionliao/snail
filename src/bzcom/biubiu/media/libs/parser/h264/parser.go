@@ -2,7 +2,6 @@ package h264
 
 import (
 	"bytes"
-	"bzcom/biubiu/media/libs/container/flv"
 	"errors"
 	"io"
 )
@@ -47,7 +46,7 @@ var (
 
 var naluIndication = []byte{0x00, 0x00, 0x00, 0x01, 0x09, 0xf0}
 
-type Demuxer struct {
+type Parser struct {
 	frameType    byte
 	specificInfo []byte
 	pps          *bytes.Buffer
@@ -67,14 +66,14 @@ type sequenceHeader struct {
 	ppsLen               int
 }
 
-func NewDemuxer() *Demuxer {
-	return &Demuxer{
+func NewParser() *Parser {
+	return &Parser{
 		pps: bytes.NewBuffer(make([]byte, maxSpsPpsLen)),
 	}
 }
 
 //return value 1:sps, value2 :pps
-func (self *Demuxer) parseSpecificInfo(src []byte) error {
+func (self *Parser) parseSpecificInfo(src []byte) error {
 	if len(src) < 9 {
 		return decDataNil
 	}
@@ -120,7 +119,7 @@ func (self *Demuxer) parseSpecificInfo(src []byte) error {
 	return nil
 }
 
-func (self *Demuxer) isNaluHeader(src []byte) bool {
+func (self *Parser) isNaluHeader(src []byte) bool {
 	if len(src) < naluBytesLen {
 		return false
 	}
@@ -130,7 +129,7 @@ func (self *Demuxer) isNaluHeader(src []byte) bool {
 		src[3] == 0x01
 }
 
-func (self *Demuxer) setNaluHeader(src []byte) error {
+func (self *Parser) setNaluHeader(src []byte) error {
 	if len(src) != naluBytesLen {
 		return naluHeaderInvalid
 	}
@@ -141,7 +140,7 @@ func (self *Demuxer) setNaluHeader(src []byte) error {
 	return nil
 }
 
-func (self *Demuxer) naluSize(src []byte) (int, error) {
+func (self *Parser) naluSize(src []byte) (int, error) {
 	if len(src) < naluBytesLen {
 		return 0, errors.New("nalusizedata invalid")
 	}
@@ -153,7 +152,7 @@ func (self *Demuxer) naluSize(src []byte) (int, error) {
 	return size, nil
 }
 
-func (self *Demuxer) getAnnexbH264(src []byte, w io.Writer) error {
+func (self *Parser) getAnnexbH264(src []byte, w io.Writer) error {
 	dataSize := len(src)
 	if dataSize < naluBytesLen {
 		return videoDataInvalid
@@ -220,19 +219,20 @@ func (self *Demuxer) getAnnexbH264(src []byte, w io.Writer) error {
 	return nil
 }
 
-func (self *Demuxer) Demux(tag *flv.Tag, w io.Writer) (err error) {
-	switch tag.MT.AVCPacketType {
-	case flv.AVC_SEQHDR:
-		err = self.parseSpecificInfo(tag.Data)
-	case flv.AVC_NALU:
-		if _, err = self.naluSize(tag.Data); err != nil {
+func (self *Parser) Parse(b []byte, isSeq bool, w io.Writer) (err error) {
+	switch isSeq {
+	case true:
+		err = self.parseSpecificInfo(b)
+	case false:
+		if _, err = self.naluSize(b); err != nil {
 			return err
 		}
+		b = b[naluBytesLen:]
 		// is annexb
-		if self.isNaluHeader(tag.Data[naluBytesLen:]) {
-			_, err = w.Write(tag.Data[naluBytesLen:])
+		if self.isNaluHeader(b) {
+			_, err = w.Write(b)
 		} else {
-			err = self.getAnnexbH264(tag.Data[naluBytesLen:], w)
+			err = self.getAnnexbH264(b, w)
 		}
 	}
 	return

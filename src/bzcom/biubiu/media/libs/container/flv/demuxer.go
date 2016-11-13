@@ -1,20 +1,22 @@
 package flv
 
-type demuxer struct {
+import "bzcom/biubiu/media/libs/common"
+
+type Demuxer struct {
 }
 
-func newDemuxer() *demuxer {
-	return &demuxer{}
+func NewDemuxer() *Demuxer {
+	return &Demuxer{}
 }
 
 // Demux,parse flv tag data and return tag which  has data
-func (self *demuxer) Demux(b []byte, tagType uint8) (tag Tag, err error) {
-	var n int
-	tag.FT.Type = tagType
-	n, err = tag.ParseMeidaTagHeader(b)
+func (self *Demuxer) Demux(p *common.Packet) (*common.Packet, error) {
+	var tag Tag
+	n, err := tag.ParseMeidaTagHeader(p.Data, p.IsVideo)
 	if err != nil {
-		return
+		return nil, err
 	}
-	tag.Data = b[n:]
-	return
+	p.Header = &tag
+	p.Data = p.Data[n:]
+	return p, nil
 }

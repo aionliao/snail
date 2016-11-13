@@ -1,15 +1,18 @@
 package flv
 
-import "fmt"
+import (
+	"bzcom/biubiu/media/libs/common"
+	"fmt"
+)
 
-type FLVTag struct {
-	Type      uint8
-	DataSize  uint32
-	TimeStamp uint32
-	StreamID  uint32 // always 0
+type flvTag struct {
+	fType     uint8
+	dataSize  uint32
+	timeStamp uint32
+	streamID  uint32 // always 0
 }
 
-type MediaTag struct {
+type mediaTag struct {
 	/*
 		SoundFormat: UB[4]
 		0 = Linear PCM, platform endian
@@ -30,7 +33,7 @@ type MediaTag struct {
 		AAC is supported in Flash Player 9,0,115,0 and higher.
 		Speex is supported in Flash Player 10 and higher.
 	*/
-	SoundFormat uint8
+	soundFormat uint8
 
 	/*
 		SoundRate: UB[2]
@@ -40,7 +43,7 @@ type MediaTag struct {
 		2 = 22-kHz
 		3 = 44-kHz
 	*/
-	SoundRate uint8
+	soundRate uint8
 
 	/*
 		SoundSize: UB[1]
@@ -50,7 +53,7 @@ type MediaTag struct {
 		This parameter only pertains to uncompressed formats.
 		Compressed formats always decode to 16 bits internally
 	*/
-	SoundSize uint8
+	soundSize uint8
 
 	/*
 		SoundType: UB[1]
@@ -59,13 +62,13 @@ type MediaTag struct {
 		Mono or stereo sound For Nellymoser: always 0
 		For AAC: always 1
 	*/
-	SoundType uint8
+	soundType uint8
 
 	/*
 		0: AAC sequence header
 		1: AAC raw
 	*/
-	AACPacketType uint8
+	aacPacketType uint8
 
 	/*
 		1: keyframe (for AVC, a seekable frame)
@@ -74,7 +77,7 @@ type MediaTag struct {
 		4: generated keyframe (reserved for server use only)
 		5: video info/command frame
 	*/
-	FrameType uint8
+	frameType uint8
 
 	/*
 		1: JPEG (currently unused)
@@ -85,22 +88,57 @@ type MediaTag struct {
 		6: Screen video version 2
 		7: AVC
 	*/
-	CodecID uint8
+	codecID uint8
 
 	/*
 		0: AVC sequence header
 		1: AVC NALU
 		2: AVC end of sequence (lower level NALU sequence ender is not required or supported)
 	*/
-	AVCPacketType uint8
+	avcPacketType uint8
 
-	CompositionTime int32
+	compositionTime int32
 }
 
 type Tag struct {
-	FT   FLVTag
-	MT   MediaTag
-	Data []byte
+	flvt   flvTag
+	mediat mediaTag
+}
+
+func (self *Tag) SoundFormat() uint8 {
+	return self.mediat.soundFormat
+}
+
+func (self *Tag) AACPacketType() uint8 {
+	return self.mediat.aacPacketType
+}
+
+func (self *Tag) IsKeyFrame() bool {
+	return self.mediat.frameType == common.FRAME_KEY
+}
+
+func (self *Tag) IsSeq() bool {
+	return self.mediat.frameType == common.FRAME_KEY &&
+		self.mediat.avcPacketType == common.AVC_SEQHDR
+}
+
+func (self *Tag) CodecID() uint8 {
+	return self.mediat.codecID
+}
+
+func (self *Tag) CompositionTime() int32 {
+	return self.mediat.compositionTime
+}
+
+// ParseMeidaTagHeader, parse video, audio, tag header
+func (self *Tag) ParseMeidaTagHeader(b []byte, isVideo bool) (n int, err error) {
+	switch isVideo {
+	case false:
+		n, err = self.parseAudioHeader(b)
+	case true:
+		n, err = self.parseVideoHeader(b)
+	}
+	return
 }
 
 func (self *Tag) parseAudioHeader(b []byte) (n int, err error) {
@@ -109,14 +147,14 @@ func (self *Tag) parseAudioHeader(b []byte) (n int, err error) {
 		return
 	}
 	flags := b[0]
-	self.MT.SoundFormat = flags >> 4
-	self.MT.SoundRate = (flags >> 2) & 0x3
-	self.MT.SoundSize = (flags >> 1) & 0x1
-	self.MT.SoundType = flags & 0x1
+	self.mediat.soundFormat = flags >> 4
+	self.mediat.soundRate = (flags >> 2) & 0x3
+	self.mediat.soundSize = (flags >> 1) & 0x1
+	self.mediat.soundType = flags & 0x1
 	n++
-	switch self.MT.SoundFormat {
-	case SOUND_AAC:
-		self.MT.AACPacketType = b[1]
+	switch self.mediat.soundFormat {
+	case common.SOUND_AAC:
+		self.mediat.aacPacketType = b[1]
 		n++
 	}
 	return
@@ -128,43 +166,15 @@ func (self *Tag) parseVideoHeader(b []byte) (n int, err error) {
 		return
 	}
 	flags := b[0]
-	self.MT.FrameType = flags >> 4
-	self.MT.CodecID = flags & 0xf
+	self.mediat.frameType = flags >> 4
+	self.mediat.codecID = flags & 0xf
 	n++
-	if self.MT.FrameType == FRAME_INTER || self.MT.FrameType == FRAME_KEY {
-		self.MT.AVCPacketType = b[1]
+	if self.mediat.frameType == common.FRAME_INTER || self.mediat.frameType == common.FRAME_KEY {
+		self.mediat.avcPacketType = b[1]
 		for i := 2; i < 5; i++ {
-			self.MT.CompositionTime = self.MT.CompositionTime<<8 + int32(b[i])
+			self.mediat.compositionTime = self.mediat.compositionTime<<8 + int32(b[i])
 		}
 		n += 4
 	}
-	return
-}
-
-// ParseMeidaTagHeader, parse video, audio, tag header
-func (self *Tag) ParseMeidaTagHeader(b []byte) (n int, err error) {
-	switch self.FT.Type {
-	case TAG_AUDIO:
-		n, err = self.parseAudioHeader(b)
-	case TAG_VIDEO:
-		n, err = self.parseVideoHeader(b)
-	}
-	return
-}
-
-// ParseFlvTagHeader ,parse FLV tag Header
-func ParseFlvTagHeader(b []byte) (tag Tag, err error) {
-	tagType := b[0]
-	switch tagType {
-	case TAG_AUDIO, TAG_VIDEO, TAG_SCRIPTDATA:
-		tag.FT.Type = tagType
-	default:
-		err = fmt.Errorf("invalid tagType:%d", tagType)
-		return
-	}
-	tag.FT.DataSize = uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
-	ts := uint32(b[4])<<16 | uint32(b[5])<<8 | uint32(b[6])
-	tso := b[7]
-	tag.FT.TimeStamp = ts | uint32(tso)<<24
 	return
 }

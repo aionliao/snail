@@ -1,14 +1,21 @@
 package ts
 
 import (
-	"bzcom/biubiu/media/libs/container/flv"
+	"bzcom/biubiu/media/libs/common"
 	"io"
 )
 
 const (
 	tsDefaultDataLen = 184
 	tsPacketLen      = 188
-	H264DefaultHZ    = 90
+	h264DefaultHZ    = 90
+)
+
+const (
+	videoPID = 0x100
+	audioPID = 0x101
+	videoSID = 0xe0
+	audioSID = 0xc0
 )
 
 type Muxer struct {
@@ -16,66 +23,41 @@ type Muxer struct {
 	audioCc  byte
 	patCc    byte
 	pmtCc    byte
-	pes      *pesHeader
-	tsPacket [tsPacketLen]byte
 	pat      [tsPacketLen]byte
 	pmt      [tsPacketLen]byte
-}
-
-type Frame struct {
-	dts         uint64
-	pts         uint64
-	pid         uint32
-	sid         uint32
-	isVideo     bool
-	isKey       bool
-	soundFormat byte
-	data        []byte
-}
-
-// Init info  based on params
-func (self *Frame) Make(b []byte, isKey, isVideo bool, pts, dts uint64, soundFormat byte) {
-	if isVideo == true {
-		self.pid = 0x100
-		self.sid = 0xe0
-	} else {
-		self.pid = 0x101
-		self.sid = 0xc0
-	}
-	self.data = b
-	self.pts = pts
-	self.dts = dts
-	self.isKey = isKey
-	self.isVideo = isVideo
-	self.soundFormat = soundFormat
+	tsPacket [tsPacketLen]byte
 }
 
 func NewMuxer() *Muxer {
-	return &Muxer{
-		pes: &pesHeader{},
-	}
+	return &Muxer{}
 }
 
-func (self *Muxer) Mux(frame *Frame, w io.Writer) error {
-	i := byte(0)
-	first := byte(1)
-	dataLen := byte(0)
-	writedBytes := 0
-	pesHeaderIndex := 0
+func (self *Muxer) Mux(p *common.Packet, w io.Writer) error {
+	first := true
+	wBytes := 0
+	pesIndex := 0
 	tmpLen := byte(0)
-	//pes header packet
+	dataLen := byte(0)
+
 	var pes pesHeader
-	err := pes.packet(frame)
+	dts := int64(p.TimeStamp) * int64(h264DefaultHZ)
+	pts := dts
+	pid := audioPID
+	var videoH common.VideoPacketHeader
+	if p.IsVideo {
+		pid = videoPID
+		videoH, _ = p.Header.(common.VideoPacketHeader)
+		pts = dts + int64(videoH.CompositionTime())*int64(h264DefaultHZ)
+	}
+	err := pes.packet(p, pts, dts)
 	if err != nil {
 		return err
 	}
 	pesHeaderLen := pes.len
-	pesPacketBytes := len(frame.data) + int(pesHeaderLen)
-	for {
-		if pesPacketBytes <= 0 {
-			break
-		}
-		if frame.isVideo {
+	packetBytesLen := len(p.Data) + int(pesHeaderLen)
+
+	for packetBytesLen > 0 {
+		if p.IsVideo {
 			self.videoCc++
 			if self.videoCc > 0xf {
 				self.videoCc = 0
@@ -86,51 +68,54 @@ func (self *Muxer) Mux(frame *Frame, w io.Writer) error {
 				self.audioCc = 0
 			}
 		}
-		i = 0
+
+		i := byte(0)
+
 		//sync byte
 		self.tsPacket[i] = 0x47
 		i++
+
 		//error indicator, unit start indicator,ts priority,pid
-		self.tsPacket[i] = byte(frame.pid >> 8) //pid high 5 bits
-		if first == 1 {
+		self.tsPacket[i] = byte(pid >> 8) //pid high 5 bits
+		if first {
 			self.tsPacket[i] = self.tsPacket[i] | 0x40 //unit start indicator
 		}
 		i++
+
 		//pid low 8 bits
-		self.tsPacket[i] = byte(frame.pid)
+		self.tsPacket[i] = byte(pid)
 		i++
 
 		//scram control, adaptation control, counter
-		if frame.isVideo {
+		if p.IsVideo {
 			self.tsPacket[i] = 0x10 | byte(self.videoCc&0x0f)
 		} else {
 			self.tsPacket[i] = 0x10 | byte(self.audioCc&0x0f)
 		}
 		i++
 
-		if first == 1 {
-			//关键帧需要加pcr
-			if frame.isKey {
-				self.tsPacket[3] |= 0x20
-				self.tsPacket[i] = 7
-				i++
-				self.tsPacket[i] = 0x50
-				i++
-				self.writePcr(self.tsPacket[0:], i, frame.dts)
-				i += 6
-			}
+		//关键帧需要加pcr
+		if first && p.IsVideo && videoH.IsKeyFrame() {
+			self.tsPacket[3] |= 0x20
+			self.tsPacket[i] = 7
+			i++
+			self.tsPacket[i] = 0x50
+			i++
+			self.writePcr(self.tsPacket[0:], i, dts)
+			i += 6
 		}
+
 		//frame data
-		if pesPacketBytes >= tsDefaultDataLen {
+		if packetBytesLen >= tsDefaultDataLen {
 			dataLen = tsDefaultDataLen
-			if first == 1 {
+			if first {
 				dataLen -= (i - 4)
 			}
 		} else {
 			self.tsPacket[3] |= 0x20 //have adaptation
 			remainBytes := byte(0)
-			dataLen = byte(pesPacketBytes)
-			if first == 1 {
+			dataLen = byte(packetBytesLen)
+			if first {
 				remainBytes = tsDefaultDataLen - dataLen - (i - 4)
 			} else {
 				remainBytes = tsDefaultDataLen - dataLen
@@ -138,17 +123,17 @@ func (self *Muxer) Mux(frame *Frame, w io.Writer) error {
 			self.adaptationBufInit(self.tsPacket[i:], byte(remainBytes))
 			i += remainBytes
 		}
-		if first == 1 && i < tsPacketLen && pesHeaderLen > 0 {
+		if first && i < tsPacketLen && pesHeaderLen > 0 {
 			tmpLen = tsPacketLen - i
 			if pesHeaderLen <= tmpLen {
 				tmpLen = pesHeaderLen
 			}
-			copy(self.tsPacket[i:], pes.data[pesHeaderIndex:pesHeaderIndex+int(tmpLen)])
+			copy(self.tsPacket[i:], pes.data[pesIndex:pesIndex+int(tmpLen)])
 			i += tmpLen
-			pesPacketBytes -= int(tmpLen)
+			packetBytesLen -= int(tmpLen)
 			dataLen -= tmpLen
 			pesHeaderLen -= tmpLen
-			pesHeaderIndex += int(tmpLen)
+			pesIndex += int(tmpLen)
 		}
 
 		if i < tsPacketLen {
@@ -156,16 +141,16 @@ func (self *Muxer) Mux(frame *Frame, w io.Writer) error {
 			if tmpLen <= dataLen {
 				dataLen = tmpLen
 			}
-			copy(self.tsPacket[i:], frame.data[writedBytes:writedBytes+int(dataLen)])
-			writedBytes += int(dataLen)
-			pesPacketBytes -= int(dataLen)
+			copy(self.tsPacket[i:], p.Data[wBytes:wBytes+int(dataLen)])
+			wBytes += int(dataLen)
+			packetBytesLen -= int(dataLen)
 		}
 		if w != nil {
 			if _, err := w.Write(self.tsPacket[0:]); err != nil {
 				return err
 			}
 		}
-		first = 0
+		first = false
 	}
 
 	return nil
@@ -173,9 +158,8 @@ func (self *Muxer) Mux(frame *Frame, w io.Writer) error {
 
 //PAT return pat data
 func (self *Muxer) PAT() []byte {
-
-	i := int(0)
-	remainByte := int(0)
+	i := 0
+	remainByte := 0
 	tsHeader := []byte{0x47, 0x40, 0x00, 0x10, 0x00}
 	patHeader := []byte{0x00, 0xb0, 0x0d, 0x00, 0x01, 0xc1, 0x00, 0x00, 0x00, 0x01, 0xf0, 0x01}
 
@@ -233,8 +217,8 @@ func (self *Muxer) PMT(soundFormat byte, hasVideo bool) []byte {
 	tsHeader[3] |= self.pmtCc & 0x0f
 	self.pmtCc++
 
-	if soundFormat == flv.SOUND_AAC ||
-		soundFormat == flv.SOUND_MP3 {
+	if soundFormat == common.SOUND_AAC ||
+		soundFormat == common.SOUND_MP3 {
 		if hasVideo {
 			progInfo[5] = 0x4
 		} else {
@@ -281,7 +265,7 @@ func (self *Muxer) adaptationBufInit(src []byte, remainBytes byte) {
 	return
 }
 
-func (self *Muxer) writePcr(b []byte, i byte, pcr uint64) error {
+func (self *Muxer) writePcr(b []byte, i byte, pcr int64) error {
 	b[i] = byte(pcr >> 25)
 	i++
 	b[i] = byte((pcr >> 17) & 0xff)
@@ -303,36 +287,38 @@ type pesHeader struct {
 }
 
 //pesPacket return pes packet
-func (self *pesHeader) packet(frame *Frame) error {
-	i := 0
-	flag := 0x80
-	pesSize := 0
-	headerSize := 5
-
-	if frame.isVideo {
-		if frame.pts != frame.dts {
-			headerSize += 5 //add dts
-			flag |= 0x40
-		}
-	}
-
+func (self *pesHeader) packet(p *common.Packet, pts, dts int64) error {
 	//PES header
+	i := 0
 	self.data[i] = 0x00
 	i++
 	self.data[i] = 0x00
 	i++
 	self.data[i] = 0x01
 	i++
-	self.data[i] = byte(frame.sid)
+
+	sid := audioSID
+	if p.IsVideo {
+		sid = videoSID
+	}
+	self.data[i] = byte(sid)
 	i++
 
-	pesSize = len(frame.data) + headerSize + 3
-	if pesSize > 0xffff {
-		pesSize = 0
+	flag := 0x80
+	ptslen := 5
+	dtslen := ptslen
+	headerSize := ptslen
+	if p.IsVideo && pts != dts {
+		flag |= 0x40
+		headerSize += 5 //add dts
 	}
-	self.data[i] = byte(pesSize >> 8)
+	size := len(p.Data) + headerSize + 3
+	if size > 0xffff {
+		size = 0
+	}
+	self.data[i] = byte(size >> 8)
 	i++
-	self.data[i] = byte(pesSize)
+	self.data[i] = byte(size)
 	i++
 
 	self.data[i] = 0x80
@@ -342,11 +328,11 @@ func (self *pesHeader) packet(frame *Frame) error {
 	self.data[i] = byte(headerSize)
 	i++
 
-	self.writePts(self.data[0:], i, flag>>6, frame.pts)
-	i += 5
-	if frame.isVideo && frame.pts != frame.dts {
-		self.writePts(self.data[0:], i, 1, frame.dts)
-		i += 5
+	self.writeTs(self.data[0:], i, flag>>6, pts)
+	i += ptslen
+	if p.IsVideo && pts != dts {
+		self.writeTs(self.data[0:], i, 1, dts)
+		i += dtslen
 	}
 
 	self.len = byte(i)
@@ -354,24 +340,22 @@ func (self *pesHeader) packet(frame *Frame) error {
 	return nil
 }
 
-func (self *pesHeader) writePts(src []byte, i int, fb int, pts uint64) {
+func (self *pesHeader) writeTs(src []byte, i int, fb int, ts int64) {
 	val := uint32(0)
-
-	if pts > 0x1ffffffff {
-		pts -= 0x1ffffffff
+	if ts > 0x1ffffffff {
+		ts -= 0x1ffffffff
 	}
-
-	val = uint32(fb<<4) | ((uint32(pts>>30) & 0x07) << 1) | 1
+	val = uint32(fb<<4) | ((uint32(ts>>30) & 0x07) << 1) | 1
 	src[i] = byte(val)
 	i++
 
-	val = ((uint32(pts>>15) & 0x7fff) << 1) | 1
+	val = ((uint32(ts>>15) & 0x7fff) << 1) | 1
 	src[i] = byte(val >> 8)
 	i++
 	src[i] = byte(val)
 	i++
 
-	val = (uint32(pts&0x7fff) << 1) | 1
+	val = (uint32(ts&0x7fff) << 1) | 1
 	src[i] = byte(val >> 8)
 	i++
 	src[i] = byte(val)

@@ -1,4 +1,4 @@
-package flv
+package common
 
 const (
 	TAG_AUDIO      = 8
@@ -41,7 +41,3 @@ const (
 
 	VIDEO_H264 = 7
 )
-
-type FLVDemuxer interface {
-	Demux([]byte, uint8) (tag Tag, err error)
-}

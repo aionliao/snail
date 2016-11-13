@@ -2,12 +2,12 @@ package mp3
 
 import "errors"
 
-type Demuxer struct {
+type Parser struct {
 	samplingFrequency int
 }
 
-func NewDemuxer() *Demuxer {
-	return &Demuxer{}
+func NewParser() *Parser {
+	return &Parser{}
 }
 
 // sampling_frequency - indicates the sampling frequency, according to the following table.
@@ -21,7 +21,7 @@ var (
 	errIndexInvalid   = errors.New("invalid rate index")
 )
 
-func (self *Demuxer) Demux(src []byte) error {
+func (self *Parser) Parse(src []byte) error {
 	if len(src) < 3 {
 		return errMp3DataInvalid
 	}
@@ -33,7 +33,7 @@ func (self *Demuxer) Demux(src []byte) error {
 	return errIndexInvalid
 }
 
-func (self *Demuxer) SampleRate() int {
+func (self *Parser) SampleRate() int {
 	if self.samplingFrequency == 0 {
 		self.samplingFrequency = 44100
 	}

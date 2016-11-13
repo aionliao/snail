@@ -1,7 +1,7 @@
 package aac
 
 import (
-	"bzcom/biubiu/media/libs/container/flv"
+	"bzcom/biubiu/media/libs/common"
 	"errors"
 	"io"
 )
@@ -33,21 +33,21 @@ const (
 	adtsHeaderLen = 7
 )
 
-type Demuxer struct {
+type Parser struct {
 	gettedSpecific bool
 	adtsHeader     []byte
 	cfgInfo        *mpegCfgInfo
 }
 
-func NewDemuxer() *Demuxer {
-	return &Demuxer{
+func NewParser() *Parser {
+	return &Parser{
 		gettedSpecific: false,
 		cfgInfo:        &mpegCfgInfo{},
 		adtsHeader:     make([]byte, adtsHeaderLen),
 	}
 }
 
-func (self *Demuxer) specificInfo(src []byte) error {
+func (self *Parser) specificInfo(src []byte) error {
 	if len(src) < 2 {
 		return specificBufInvalid
 	}
@@ -59,7 +59,7 @@ func (self *Demuxer) specificInfo(src []byte) error {
 	return nil
 }
 
-func (self *Demuxer) adts(src []byte, w io.Writer) error {
+func (self *Parser) adts(src []byte, w io.Writer) error {
 	if len(src) <= 0 || !self.gettedSpecific {
 		return audioBufInvalid
 	}
@@ -95,7 +95,7 @@ func (self *Demuxer) adts(src []byte, w io.Writer) error {
 	return nil
 }
 
-func (self *Demuxer) SampleRate() int {
+func (self *Parser) SampleRate() int {
 	rate := 44100
 	if self.cfgInfo.sampleRate <= byte(len(aacRates)-1) {
 		rate = aacRates[self.cfgInfo.sampleRate]
@@ -103,12 +103,12 @@ func (self *Demuxer) SampleRate() int {
 	return rate
 }
 
-func (self *Demuxer) Demux(tag *flv.Tag, w io.Writer) (err error) {
-	switch tag.MT.AACPacketType {
-	case flv.AAC_SEQHDR:
-		err = self.specificInfo(tag.Data)
-	case flv.AAC_RAW:
-		err = self.adts(tag.Data, w)
+func (self *Parser) Parse(b []byte, packetType uint8, w io.Writer) (err error) {
+	switch packetType {
+	case common.AAC_SEQHDR:
+		err = self.specificInfo(b)
+	case common.AAC_RAW:
+		err = self.adts(b, w)
 	}
 	return
 }
