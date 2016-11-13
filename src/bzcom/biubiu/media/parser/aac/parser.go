@@ -1,7 +1,7 @@
 package aac
 
 import (
-	"bzcom/biubiu/media/libs/av"
+	"bzcom/biubiu/media/av"
 	"errors"
 	"io"
 )

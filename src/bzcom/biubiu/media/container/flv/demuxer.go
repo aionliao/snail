@@ -1,6 +1,6 @@
 package flv
 
-import "bzcom/biubiu/media/libs/av"
+import "bzcom/biubiu/media/av"
 
 type Demuxer struct {
 }

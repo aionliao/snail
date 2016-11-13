@@ -1,7 +1,7 @@
 package flv
 
 import (
-	"bzcom/biubiu/media/libs/av"
+	"bzcom/biubiu/media/av"
 	"fmt"
 )
 

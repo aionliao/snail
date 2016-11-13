@@ -1,7 +1,7 @@
 package ts
 
 import (
-	"bzcom/biubiu/media/libs/av"
+	"bzcom/biubiu/media/av"
 	"io"
 )
 

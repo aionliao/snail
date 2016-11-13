@@ -1,10 +1,10 @@
 package codec
 
 import (
-	"bzcom/biubiu/media/libs/av"
-	"bzcom/biubiu/media/libs/parser/aac"
-	"bzcom/biubiu/media/libs/parser/h264"
-	"bzcom/biubiu/media/libs/parser/mp3"
+	"bzcom/biubiu/media/av"
+	"bzcom/biubiu/media/parser/aac"
+	"bzcom/biubiu/media/parser/h264"
+	"bzcom/biubiu/media/parser/mp3"
 	"errors"
 	"io"
 )
