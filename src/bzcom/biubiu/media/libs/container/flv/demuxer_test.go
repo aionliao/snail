@@ -1,7 +1,7 @@
 package flv
 
 import (
-	"bzcom/biubiu/media/libs/common"
+	"bzcom/biubiu/media/libs/av"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,15 +18,15 @@ func TestDemuxerVideo(t *testing.T) {
 		0x03, 0x00, 0x10, 0x00, 0x00, 0x03, 0x01, 0xe8, 0xf1, 0x62, 0xd9, 0x60, 0x01, 0x00,
 		0x05, 0x68, 0xe9, 0x3b, 0x2c, 0x8b, 0x00, 0x00, 0x00, 0x14, 0x62, 0x74, 0x72, 0x74,
 	}
-	packet := common.Packet{
+	packet := av.Packet{
 		IsVideo: true,
 		Data:    videoSequnce,
 	}
 	p, err := d.Demux(&packet)
 	at.Equal(err, nil)
-	f, ok := p.Header.(common.VideoPacketHeader)
+	f, ok := p.Header.(av.VideoPacketHeader)
 	at.Equal(ok, true)
-	at.Equal(int(f.CodecID()), common.VIDEO_H264)
+	at.Equal(int(f.CodecID()), av.VIDEO_H264)
 	at.Equal(f.IsSeq(), true)
 	at.Equal(f.IsKeyFrame(), true)
 	at.Equal(int(f.CompositionTime()), 0)
@@ -42,9 +42,9 @@ func TestDemuxerVideo(t *testing.T) {
 	p.Data = videoKeyFrame
 	p, err = d.Demux(&packet)
 	at.Equal(err, nil)
-	f, ok = p.Header.(common.VideoPacketHeader)
+	f, ok = p.Header.(av.VideoPacketHeader)
 	at.Equal(ok, true)
-	at.Equal(int(f.CodecID()), common.VIDEO_H264)
+	at.Equal(int(f.CodecID()), av.VIDEO_H264)
 	at.Equal(f.IsSeq(), false)
 	at.Equal(f.IsKeyFrame(), true)
 	at.Equal(int(f.CompositionTime()), 133)
@@ -55,13 +55,13 @@ func TestDemuxerAudio(t *testing.T) {
 	at := assert.New(t)
 	d := NewDemuxer()
 	audioSequence := []byte{0xaf, 0x00, 0x13, 0x90, 0x56, 0xe5, 0xa5, 0x48, 0x00}
-	packet := common.Packet{
+	packet := av.Packet{
 		IsVideo: false,
 		Data:    audioSequence,
 	}
 	p, err := d.Demux(&packet)
 	at.Equal(err, nil)
-	f, ok := p.Header.(common.AudioPacketHeader)
+	f, ok := p.Header.(av.AudioPacketHeader)
 	at.Equal(ok, true)
 	at.Equal(int(f.SoundFormat()), 10)
 	at.Equal(p.Data, audioSequence[2:])

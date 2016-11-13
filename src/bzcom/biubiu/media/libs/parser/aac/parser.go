@@ -1,7 +1,7 @@
 package aac
 
 import (
-	"bzcom/biubiu/media/libs/common"
+	"bzcom/biubiu/media/libs/av"
 	"errors"
 	"io"
 )
@@ -105,9 +105,9 @@ func (self *Parser) SampleRate() int {
 
 func (self *Parser) Parse(b []byte, packetType uint8, w io.Writer) (err error) {
 	switch packetType {
-	case common.AAC_SEQHDR:
+	case av.AAC_SEQHDR:
 		err = self.specificInfo(b)
-	case common.AAC_RAW:
+	case av.AAC_RAW:
 		err = self.adts(b, w)
 	}
 	return

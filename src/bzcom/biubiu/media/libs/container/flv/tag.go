@@ -1,7 +1,7 @@
 package flv
 
 import (
-	"bzcom/biubiu/media/libs/common"
+	"bzcom/biubiu/media/libs/av"
 	"fmt"
 )
 
@@ -114,12 +114,12 @@ func (self *Tag) AACPacketType() uint8 {
 }
 
 func (self *Tag) IsKeyFrame() bool {
-	return self.mediat.frameType == common.FRAME_KEY
+	return self.mediat.frameType == av.FRAME_KEY
 }
 
 func (self *Tag) IsSeq() bool {
-	return self.mediat.frameType == common.FRAME_KEY &&
-		self.mediat.avcPacketType == common.AVC_SEQHDR
+	return self.mediat.frameType == av.FRAME_KEY &&
+		self.mediat.avcPacketType == av.AVC_SEQHDR
 }
 
 func (self *Tag) CodecID() uint8 {
@@ -153,7 +153,7 @@ func (self *Tag) parseAudioHeader(b []byte) (n int, err error) {
 	self.mediat.soundType = flags & 0x1
 	n++
 	switch self.mediat.soundFormat {
-	case common.SOUND_AAC:
+	case av.SOUND_AAC:
 		self.mediat.aacPacketType = b[1]
 		n++
 	}
@@ -169,7 +169,7 @@ func (self *Tag) parseVideoHeader(b []byte) (n int, err error) {
 	self.mediat.frameType = flags >> 4
 	self.mediat.codecID = flags & 0xf
 	n++
-	if self.mediat.frameType == common.FRAME_INTER || self.mediat.frameType == common.FRAME_KEY {
+	if self.mediat.frameType == av.FRAME_INTER || self.mediat.frameType == av.FRAME_KEY {
 		self.mediat.avcPacketType = b[1]
 		for i := 2; i < 5; i++ {
 			self.mediat.compositionTime = self.mediat.compositionTime<<8 + int32(b[i])

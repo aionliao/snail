@@ -1,6 +1,6 @@
 package flv
 
-import "bzcom/biubiu/media/libs/common"
+import "bzcom/biubiu/media/libs/av"
 
 type Demuxer struct {
 }
@@ -10,7 +10,7 @@ func NewDemuxer() *Demuxer {
 }
 
 // Demux,parse flv tag data and return tag which  has data
-func (self *Demuxer) Demux(p *common.Packet) (*common.Packet, error) {
+func (self *Demuxer) Demux(p *av.Packet) (*av.Packet, error) {
 	var tag Tag
 	n, err := tag.ParseMeidaTagHeader(p.Data, p.IsVideo)
 	if err != nil {

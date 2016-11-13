@@ -1,7 +1,7 @@
 package ts
 
 import (
-	"bzcom/biubiu/media/libs/common"
+	"bzcom/biubiu/media/libs/av"
 	"io"
 )
 
@@ -32,7 +32,7 @@ func NewMuxer() *Muxer {
 	return &Muxer{}
 }
 
-func (self *Muxer) Mux(p *common.Packet, w io.Writer) error {
+func (self *Muxer) Mux(p *av.Packet, w io.Writer) error {
 	first := true
 	wBytes := 0
 	pesIndex := 0
@@ -43,10 +43,10 @@ func (self *Muxer) Mux(p *common.Packet, w io.Writer) error {
 	dts := int64(p.TimeStamp) * int64(h264DefaultHZ)
 	pts := dts
 	pid := audioPID
-	var videoH common.VideoPacketHeader
+	var videoH av.VideoPacketHeader
 	if p.IsVideo {
 		pid = videoPID
-		videoH, _ = p.Header.(common.VideoPacketHeader)
+		videoH, _ = p.Header.(av.VideoPacketHeader)
 		pts = dts + int64(videoH.CompositionTime())*int64(h264DefaultHZ)
 	}
 	err := pes.packet(p, pts, dts)
@@ -217,8 +217,8 @@ func (self *Muxer) PMT(soundFormat byte, hasVideo bool) []byte {
 	tsHeader[3] |= self.pmtCc & 0x0f
 	self.pmtCc++
 
-	if soundFormat == common.SOUND_AAC ||
-		soundFormat == common.SOUND_MP3 {
+	if soundFormat == av.SOUND_AAC ||
+		soundFormat == av.SOUND_MP3 {
 		if hasVideo {
 			progInfo[5] = 0x4
 		} else {
@@ -287,7 +287,7 @@ type pesHeader struct {
 }
 
 //pesPacket return pes packet
-func (self *pesHeader) packet(p *common.Packet, pts, dts int64) error {
+func (self *pesHeader) packet(p *av.Packet, pts, dts int64) error {
 	//PES header
 	i := 0
 	self.data[i] = 0x00

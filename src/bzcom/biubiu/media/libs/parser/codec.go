@@ -1,7 +1,7 @@
 package codec
 
 import (
-	"bzcom/biubiu/media/libs/common"
+	"bzcom/biubiu/media/libs/av"
 	"bzcom/biubiu/media/libs/parser/aac"
 	"bzcom/biubiu/media/libs/parser/h264"
 	"bzcom/biubiu/media/libs/parser/mp3"
@@ -33,13 +33,13 @@ func (self *CodecParser) SampleRate() (int, error) {
 	return self.mp3.SampleRate(), nil
 }
 
-func (self *CodecParser) Parse(p *common.Packet, w io.Writer) (err error) {
+func (self *CodecParser) Parse(p *av.Packet, w io.Writer) (err error) {
 
 	switch p.IsVideo {
 	case true:
-		f, ok := p.Header.(common.VideoPacketHeader)
+		f, ok := p.Header.(av.VideoPacketHeader)
 		if ok {
-			if f.CodecID() == common.VIDEO_H264 {
+			if f.CodecID() == av.VIDEO_H264 {
 				if self.h264 == nil {
 					self.h264 = h264.NewParser()
 				}
@@ -47,15 +47,15 @@ func (self *CodecParser) Parse(p *common.Packet, w io.Writer) (err error) {
 			}
 		}
 	case false:
-		f, ok := p.Header.(common.AudioPacketHeader)
+		f, ok := p.Header.(av.AudioPacketHeader)
 		if ok {
 			switch f.SoundFormat() {
-			case common.SOUND_AAC:
+			case av.SOUND_AAC:
 				if self.aac == nil {
 					self.aac = aac.NewParser()
 				}
 				err = self.aac.Parse(p.Data, f.AACPacketType(), w)
-			case common.SOUND_MP3:
+			case av.SOUND_MP3:
 				if self.mp3 == nil {
 					self.mp3 = mp3.NewParser()
 				}
