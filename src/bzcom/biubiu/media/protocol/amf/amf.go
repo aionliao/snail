@@ -17,6 +17,15 @@ func (d *Decoder) Decode(r io.Reader, ver Version) (interface{}, error) {
 	return nil, errors.New(fmt.Sprintf("decode amf: unsupported version %d", ver))
 }
 
+func (e *Encoder) EncodeBatch(w io.Writer, ver Version, val ...interface{}) (int, error) {
+	for _, v := range val {
+		if _, err := e.Encode(w, v, ver); err != nil {
+			return 0, err
+		}
+	}
+	return 0, nil
+}
+
 func (e *Encoder) Encode(w io.Writer, val interface{}, ver Version) (int, error) {
 	switch ver {
 	case AMF0:

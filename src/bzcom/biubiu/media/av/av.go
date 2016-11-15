@@ -9,6 +9,11 @@ const (
 )
 
 const (
+	MetadatAMF0  = 0x12
+	MetadataAMF3 = 0xf
+)
+
+const (
 	SOUND_MP3                   = 2
 	SOUND_NELLYMOSER_16KHZ_MONO = 4
 	SOUND_NELLYMOSER_8KHZ_MONO  = 5
@@ -46,10 +51,11 @@ const (
 
 // Header can be converted to AudioHeaderInfo or VideoHeaderInfo
 type Packet struct {
-	IsVideo   bool
-	TimeStamp uint32 // dts
-	Header    PacketHeader
-	Data      []byte
+	IsVideo    bool
+	IsMetadata bool
+	TimeStamp  uint32 // dts
+	Header     PacketHeader
+	Data       []byte
 }
 
 type PacketHeader interface {
@@ -84,4 +90,30 @@ type SampleRater interface {
 type CodecParser interface {
 	SampleRater
 	Parse(*Packet, io.Writer) error
+}
+
+type Handler interface {
+	HandleReader(ReadCloser)
+	HandleWriter(WriteCloser)
+}
+
+type Closer interface {
+	Info() Info
+	Close(error)
+}
+
+type Info struct {
+	Key string
+	URL string
+	UID string
+}
+
+type ReadCloser interface {
+	Closer
+	Read(*Packet) error
+}
+
+type WriteCloser interface {
+	Closer
+	Write(Packet) error
 }
