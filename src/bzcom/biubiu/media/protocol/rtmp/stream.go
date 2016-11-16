@@ -106,6 +106,7 @@ func (self *Stream) Copy(dst *Stream) {
 	self.lock.Lock()
 	for k, v := range self.ws {
 		delete(self.ws, k)
+		v.w.Reset()
 		dst.AddWriter(v.w)
 	}
 	self.lock.Unlock()
@@ -134,12 +135,10 @@ func (self *Stream) TransStart() {
 		var p av.Packet
 		for {
 			if !self.isStart {
-				self.r = nil
 				return
 			}
 			err := self.r.Read(&p)
 			if err != nil {
-				self.r = nil
 				self.isStart = false
 				// TODO: close special writer
 				return

@@ -121,5 +121,6 @@ type ReadCloser interface {
 type WriteCloser interface {
 	Closer
 	Alive
+	Reset()
 	Write(Packet) error
 }

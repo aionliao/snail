@@ -260,7 +260,6 @@ func (self *ConnServer) publishResp(cur *ChunkStream) error {
 }
 
 func (self *ConnServer) playResp(cur *ChunkStream) error {
-	w := bytes.NewBuffer(nil)
 	encoder := &amf.Encoder{}
 
 	self.conn.SetRecorded()
@@ -270,6 +269,7 @@ func (self *ConnServer) playResp(cur *ChunkStream) error {
 	event["level"] = "status"
 	event["code"] = "NetStream.Play.Reset"
 	event["description"] = "Playing and resetting stream."
+	w := bytes.NewBuffer(nil)
 	if _, err := encoder.EncodeBatch(w, amf.AMF0, "onStatus", 0, nil, event); err != nil {
 		return err
 	}
@@ -287,6 +287,7 @@ func (self *ConnServer) playResp(cur *ChunkStream) error {
 	event["level"] = "status"
 	event["code"] = "NetStream.Play.Start"
 	event["description"] = "Started playing stream."
+	w = bytes.NewBuffer(nil)
 	if _, err := encoder.EncodeBatch(w, amf.AMF0, "onStatus", 0, nil, event); err != nil {
 		return err
 	}
@@ -304,6 +305,7 @@ func (self *ConnServer) playResp(cur *ChunkStream) error {
 	event["level"] = "status"
 	event["code"] = "NetStream.Data.Start"
 	event["description"] = "Started playing stream."
+	w = bytes.NewBuffer(nil)
 	if _, err := encoder.EncodeBatch(w, amf.AMF0, "onStatus", 0, nil, event); err != nil {
 		return err
 	}
@@ -321,6 +323,7 @@ func (self *ConnServer) playResp(cur *ChunkStream) error {
 	event["level"] = "status"
 	event["code"] = "NetStream.Play.PublishNotify"
 	event["description"] = "Started playing notify."
+	w = bytes.NewBuffer(nil)
 	if _, err := encoder.EncodeBatch(w, amf.AMF0, "onStatus", 0, nil, event); err != nil {
 		return err
 	}

@@ -10,6 +10,20 @@ import (
 	"time"
 )
 
+type Client struct {
+	handler av.Handler
+}
+
+func NewRtmpClient(h av.Handler) *Client {
+	return &Client{
+		handler: h,
+	}
+}
+
+func (self *Client) Dial() error {
+	return nil
+}
+
 type Server struct {
 	handler av.Handler
 }
@@ -56,8 +70,11 @@ func (self *Server) handleConn(conn *core.Conn) error {
 }
 
 type VirWriter struct {
-	t    time.Time
-	conn *core.ConnServer
+	lastVideoTs uint32
+	lastAudioTs uint32
+	maxTs       uint32
+	t           time.Time
+	conn        *core.ConnServer
 }
 
 func NewVirWriter(conn *core.ConnServer) *VirWriter {
@@ -71,12 +88,20 @@ func (self *VirWriter) Write(p av.Packet) error {
 	cs.Data = p.Data
 	cs.Length = uint32(len(p.Data))
 	cs.StreamID = 1
+	cs.Timestamp = p.TimeStamp
+	cs.Timestamp += self.maxTs
+
 	if p.IsVideo {
+		self.lastVideoTs = cs.Timestamp
 		cs.TypeID = av.TAG_VIDEO
 	} else {
-		cs.TypeID = av.TAG_AUDIO
+		if p.IsMetadata {
+			cs.TypeID = av.TAG_SCRIPTDATA
+		} else {
+			self.lastAudioTs = cs.Timestamp
+			cs.TypeID = av.TAG_AUDIO
+		}
 	}
-	cs.Timestamp = p.TimeStamp
 	self.t = time.Now()
 	return self.conn.Write(cs)
 }
@@ -86,6 +111,14 @@ func (self *VirWriter) Info() (ret av.Info) {
 	ret.Key = self.conn.ConnInfo.App + "/" + self.conn.PublishInfo.Name
 	ret.URL = self.conn.ConnInfo.TcUrl + "/" + self.conn.PublishInfo.Name
 	return
+}
+
+func (self *VirWriter) Reset() {
+	if self.lastAudioTs > self.lastVideoTs {
+		self.maxTs = self.lastAudioTs
+	} else {
+		self.maxTs = self.lastVideoTs
+	}
 }
 
 func (self *VirWriter) Close(err error) {

@@ -25,7 +25,7 @@ type signed struct {
 func newSigned() *signed {
 	return &signed{
 		interval:    5 * time.Second,
-		maxDuration: 6 * time.Second,
+		maxDuration: 10 * time.Second,
 	}
 }
 
@@ -107,7 +107,6 @@ func (g *gop) pushback(chunk av.Packet) error {
 		newchunks := make([]av.Packet, gopLen)
 		g.chunks = append(g.chunks, newchunks...)
 	}
-
 	g.chunks[g.index] = chunk
 	g.index++
 	return nil
@@ -196,7 +195,10 @@ func NewGop(num int) *Gop {
 
 func (self *Gop) Write(p *av.Packet) {
 	var ap av.Packet
-	ap = *p
+	ap.IsMetadata = p.IsMetadata
+	ap.IsVideo = p.IsVideo
+	ap.Header = p.Header
+	ap.TimeStamp = p.TimeStamp
 	ap.Data = make([]byte, len(p.Data))
 	copy(ap.Data, p.Data)
 
