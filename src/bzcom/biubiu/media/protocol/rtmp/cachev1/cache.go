@@ -1,12 +1,20 @@
 package cachev1
 
-import "bzcom/biubiu/media/av"
+/***
+implement a easy's cache which contains gop, seq, metadata
+*/
+
+import (
+	"bzcom/biubiu/media/av"
+	"sync"
+)
 
 type Cache struct {
 	gop                *Gop
-	videoSeq           *Seq
-	audioSeq           *Seq
-	metadata           *Metadata
+	videoSeq           *SpecialData
+	audioSeq           *SpecialData
+	metadata           *SpecialData
+	lock               sync.RWMutex
 	hasSefaultMinTs    bool
 	lastVideoTimestamp uint32
 	lastAudioTimestamp uint32
@@ -14,10 +22,10 @@ type Cache struct {
 
 func NewCache() *Cache {
 	return &Cache{
-		gop:      NewGop(),
-		videoSeq: NewSeq(),
-		audioSeq: NewSeq(),
-		metadata: NewMetadata(),
+		gop:      NewGop(2),
+		videoSeq: NewSpecialData(),
+		audioSeq: NewSpecialData(),
+		metadata: NewSpecialData(),
 	}
 }
 
@@ -41,4 +49,24 @@ func (self *Cache) Write(p *av.Packet) {
 		}
 	}
 	self.gop.Write(p)
+}
+
+func (self *Cache) Send(w av.WriteCloser) error {
+	if err := self.metadata.Send(w); err != nil {
+		return err
+	}
+
+	if err := self.videoSeq.Send(w); err != nil {
+		return err
+	}
+
+	if err := self.audioSeq.Send(w); err != nil {
+		return err
+	}
+
+	if err := self.gop.Send(w); err != nil {
+		return err
+	}
+
+	return nil
 }

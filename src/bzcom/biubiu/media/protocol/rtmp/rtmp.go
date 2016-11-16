@@ -5,6 +5,7 @@ import (
 	"bzcom/biubiu/media/container/flv"
 	"bzcom/biubiu/media/protocol/rtmp/core"
 	"bzcom/biubiu/media/utils/uid"
+	"errors"
 	"net"
 	"time"
 )
@@ -55,6 +56,7 @@ func (self *Server) handleConn(conn *core.Conn) error {
 }
 
 type VirWriter struct {
+	t    time.Time
 	conn *core.ConnServer
 }
 
@@ -75,7 +77,7 @@ func (self *VirWriter) Write(p av.Packet) error {
 		cs.TypeID = av.TAG_AUDIO
 	}
 	cs.Timestamp = p.TimeStamp
-
+	self.t = time.Now()
 	return self.conn.Write(cs)
 }
 
@@ -90,7 +92,16 @@ func (self *VirWriter) Close(err error) {
 	self.conn.Close(err)
 }
 
+func (self *VirWriter) Alive() bool {
+	if time.Now().Sub(self.t) >= time.Second*10 {
+		self.conn.Close(errors.New("write timeout"))
+		return false
+	}
+	return true
+}
+
 type VirReader struct {
+	t       time.Time
 	demuxer *flv.Demuxer
 	conn    *core.ConnServer
 }
@@ -108,6 +119,7 @@ func (self *VirReader) Read(p *av.Packet) error {
 	if err != nil {
 		return err
 	}
+	self.t = time.Now()
 	p.IsVideo = cs.TypeID == av.TAG_VIDEO
 	p.IsMetadata = (cs.TypeID == 0x12 || cs.TypeID == 0xf)
 	p.Data = cs.Data
@@ -125,4 +137,12 @@ func (self *VirReader) Info() (ret av.Info) {
 
 func (self *VirReader) Close(err error) {
 	self.conn.Close(err)
+}
+
+func (self *VirReader) Alive() bool {
+	if time.Now().Sub(self.t) >= time.Second*10 {
+		self.conn.Close(errors.New("read timeout"))
+		return false
+	}
+	return true
 }

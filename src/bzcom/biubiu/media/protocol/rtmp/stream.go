@@ -5,6 +5,7 @@ import (
 	"bzcom/biubiu/media/protocol/rtmp/cachev1"
 	"errors"
 	"sync"
+	"time"
 )
 
 var (
@@ -17,9 +18,11 @@ type RtmpStream struct {
 }
 
 func NewRtmpStream() *RtmpStream {
-	return &RtmpStream{
+	ret := &RtmpStream{
 		streams: make(map[string]*Stream),
 	}
+	go ret.CheckAlive()
+	return ret
 }
 
 func (self *RtmpStream) HandleReader(r av.ReadCloser) {
@@ -53,6 +56,23 @@ func (self *RtmpStream) HandleWriter(w av.WriteCloser) {
 	}
 	s.AddWriter(w)
 	self.lock.Unlock()
+}
+
+func (self *RtmpStream) CheckAlive() {
+	ticker := time.NewTicker(time.Second * 5)
+	for {
+		select {
+		case <-ticker.C:
+			self.lock.Lock()
+			for k, v := range self.streams {
+				if v.CheckAlive() == 0 {
+					delete(self.streams, k)
+				}
+			}
+			self.lock.Unlock()
+		default:
+		}
+	}
 }
 
 type Stream struct {
@@ -130,7 +150,11 @@ func (self *Stream) TransStart() {
 			self.lock.Lock()
 			for k, v := range self.ws {
 				if !v.init {
-					// TODO: send cache
+					if err = self.cache.Send(v.w); err != nil {
+						delete(self.ws, k)
+						continue
+					}
+					v.init = true
 				} else {
 					if err = v.w.Write(p); err != nil {
 						delete(self.ws, k)
@@ -144,17 +168,27 @@ func (self *Stream) TransStart() {
 
 func (self *Stream) TransStop() {
 	if self.isStart && self.r != nil {
-		self.r.Close(errors.New("close old source"))
+		self.r.Close(errors.New("stop old"))
 		// TODO: close special writer
 	}
 	self.isStart = false
 }
 
-func (self *Stream) CheckAlive() {
-	for {
-		// check all writer  which is alive
+func (self *Stream) CheckAlive() (n int) {
+	self.lock.Lock()
+	if self.r != nil && self.isStart {
+		if self.r.Alive() {
+			n++
+		}
 	}
+	for k, v := range self.ws {
+		if !v.w.Alive() {
+			delete(self.ws, k)
+			continue
+		}
+		n++
+	}
+	self.lock.Unlock()
 
-	// check reader which is alive
-
+	return
 }

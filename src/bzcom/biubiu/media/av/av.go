@@ -97,6 +97,10 @@ type Handler interface {
 	HandleWriter(WriteCloser)
 }
 
+type Alive interface {
+	Alive() bool
+}
+
 type Closer interface {
 	Info() Info
 	Close(error)
@@ -110,10 +114,12 @@ type Info struct {
 
 type ReadCloser interface {
 	Closer
+	Alive
 	Read(*Packet) error
 }
 
 type WriteCloser interface {
 	Closer
+	Alive
 	Write(Packet) error
 }
