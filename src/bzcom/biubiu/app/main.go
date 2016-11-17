@@ -22,8 +22,6 @@ func main() {
 
 	stream := rtmp.NewRtmpStream()
 	//	rtmpClient := rtmp.NewRtmpClient(stream)
-	//rtmpClient.Dial("rtmp://172.16.0.1:1935/live/test")
-	//rtmpClient.Dial("rtmp://100006v.pushcdn-ws.z1.pili.qiniup.com/live/test", "play")
 
 	l, err := net.Listen("tcp", "127.0.0.1:1935")
 	if err != nil {
