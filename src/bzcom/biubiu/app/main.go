@@ -20,10 +20,15 @@ func main() {
 	router.GET("/", Index)
 	go fasthttp.ListenAndServe(":8080", router.Handler)
 
-	l, err := net.Listen("tcp", ":1935")
+	stream := rtmp.NewRtmpStream()
+	//	rtmpClient := rtmp.NewRtmpClient(stream)
+	//rtmpClient.Dial("rtmp://172.16.0.1:1935/live/test")
+	//rtmpClient.Dial("rtmp://100006v.pushcdn-ws.z1.pili.qiniup.com/live/test", "play")
+
+	l, err := net.Listen("tcp", "127.0.0.1:1935")
 	if err != nil {
 		log.Fatal(err)
 	}
-	rtmpServer := rtmp.NewRtmpServer(rtmp.NewRtmpStream())
+	rtmpServer := rtmp.NewRtmpServer(stream)
 	rtmpServer.Serve(l)
 }

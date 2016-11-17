@@ -20,7 +20,18 @@ func NewRtmpClient(h av.Handler) *Client {
 	}
 }
 
-func (self *Client) Dial() error {
+func (self *Client) Dial(url string, method string) error {
+	connClient := core.NewConnClient()
+	if err := connClient.Start(url, method); err != nil {
+		return err
+	}
+	if method == "publish" {
+		writer := NewVirWriter(connClient)
+		self.handler.HandleWriter(writer)
+	} else if method == "play" {
+		reader := NewVirReader(connClient)
+		self.handler.HandleReader(reader)
+	}
 	return nil
 }
 
@@ -69,17 +80,63 @@ func (self *Server) handleConn(conn *core.Conn) error {
 	return nil
 }
 
+type GetInFo interface {
+	GetInfo() (string, string, string)
+}
+
+type StreamReadWriteCloser interface {
+	GetInFo
+	Close(error)
+	Write(core.ChunkStream) error
+	Read(c *core.ChunkStream) error
+}
+
+type RWBaser struct {
+	t  time.Time
+	RW StreamReadWriteCloser
+}
+
+func NewRWBaser(rw StreamReadWriteCloser) RWBaser {
+	return RWBaser{
+		t:  time.Now(),
+		RW: rw,
+	}
+}
+
+func (self *RWBaser) Info() (ret av.Info) {
+	ret.UID = uid.NEWID()
+	app, title, url := self.RW.GetInfo()
+	ret.URL = url
+	ret.Key = app + "/" + title
+	return
+}
+
+func (self *RWBaser) Close(err error) {
+	self.RW.Close(err)
+}
+
+func (self *RWBaser) Alive() bool {
+	if time.Now().Sub(self.t) >= time.Second*30 {
+		self.RW.Close(errors.New("read timeout"))
+		return false
+	}
+	return true
+}
+
+func (self *RWBaser) SetT() {
+	self.t = time.Now()
+}
+
 type VirWriter struct {
+	RWBaser
 	lastVideoTs uint32
 	lastAudioTs uint32
 	maxTs       uint32
-	t           time.Time
-	conn        *core.ConnServer
 }
 
-func NewVirWriter(conn *core.ConnServer) *VirWriter {
+func NewVirWriter(conn StreamReadWriteCloser) *VirWriter {
 	return &VirWriter{
-		conn: conn,
+		RWBaser: NewRWBaser(conn),
 	}
 }
 
@@ -96,21 +153,14 @@ func (self *VirWriter) Write(p av.Packet) error {
 		cs.TypeID = av.TAG_VIDEO
 	} else {
 		if p.IsMetadata {
-			cs.TypeID = av.TAG_SCRIPTDATA
+			cs.TypeID = av.TAG_SCRIPTDATAAMF0
 		} else {
 			self.lastAudioTs = cs.Timestamp
 			cs.TypeID = av.TAG_AUDIO
 		}
 	}
-	self.t = time.Now()
-	return self.conn.Write(cs)
-}
-
-func (self *VirWriter) Info() (ret av.Info) {
-	ret.UID = uid.NEWID()
-	ret.Key = self.conn.ConnInfo.App + "/" + self.conn.PublishInfo.Name
-	ret.URL = self.conn.ConnInfo.TcUrl + "/" + self.conn.PublishInfo.Name
-	return
+	self.SetT()
+	return self.RW.Write(cs)
 }
 
 func (self *VirWriter) Reset() {
@@ -121,61 +171,37 @@ func (self *VirWriter) Reset() {
 	}
 }
 
-func (self *VirWriter) Close(err error) {
-	self.conn.Close(err)
-}
-
-func (self *VirWriter) Alive() bool {
-	if time.Now().Sub(self.t) >= time.Second*10 {
-		self.conn.Close(errors.New("write timeout"))
-		return false
-	}
-	return true
-}
-
 type VirReader struct {
-	t       time.Time
 	demuxer *flv.Demuxer
-	conn    *core.ConnServer
+	RWBaser
 }
 
-func NewVirReader(conn *core.ConnServer) *VirReader {
+func NewVirReader(conn StreamReadWriteCloser) *VirReader {
 	return &VirReader{
-		conn:    conn,
+		RWBaser: NewRWBaser(conn),
 		demuxer: flv.NewDemuxer(),
 	}
 }
 
-func (self *VirReader) Read(p *av.Packet) error {
+func (self *VirReader) Read(p *av.Packet) (err error) {
 	var cs core.ChunkStream
-	err := self.conn.Read(&cs)
-	if err != nil {
-		return err
+	for {
+		err = self.RW.Read(&cs)
+		if err != nil {
+			return err
+		}
+		if cs.TypeID == av.TAG_AUDIO ||
+			cs.TypeID == av.TAG_VIDEO ||
+			cs.TypeID == av.TAG_SCRIPTDATAAMF0 ||
+			cs.TypeID == av.TAG_SCRIPTDATAAMF3 {
+			break
+		}
 	}
-	self.t = time.Now()
+	self.SetT()
 	p.IsVideo = cs.TypeID == av.TAG_VIDEO
-	p.IsMetadata = (cs.TypeID == 0x12 || cs.TypeID == 0xf)
+	p.IsMetadata = (cs.TypeID == av.TAG_SCRIPTDATAAMF0 || cs.TypeID == av.TAG_SCRIPTDATAAMF3)
 	p.Data = cs.Data
 	p.TimeStamp = cs.Timestamp
 	self.demuxer.Demux(p)
 	return err
-}
-
-func (self *VirReader) Info() (ret av.Info) {
-	ret.UID = uid.NEWID()
-	ret.Key = self.conn.ConnInfo.App + "/" + self.conn.PublishInfo.Name
-	ret.URL = self.conn.ConnInfo.TcUrl + "/" + self.conn.PublishInfo.Name
-	return
-}
-
-func (self *VirReader) Close(err error) {
-	self.conn.Close(err)
-}
-
-func (self *VirReader) Alive() bool {
-	if time.Now().Sub(self.t) >= time.Second*10 {
-		self.conn.Close(errors.New("read timeout"))
-		return false
-	}
-	return true
 }

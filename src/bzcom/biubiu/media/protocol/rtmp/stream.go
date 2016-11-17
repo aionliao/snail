@@ -4,6 +4,7 @@ import (
 	"bzcom/biubiu/media/av"
 	"bzcom/biubiu/media/protocol/rtmp/cachev1"
 	"errors"
+	"log"
 	"sync"
 	"time"
 )
@@ -114,6 +115,7 @@ func (self *Stream) Copy(dst *Stream) {
 
 func (self *Stream) AddReader(r av.ReadCloser) {
 	self.lock.Lock()
+	log.Println("www", r)
 	self.r = r
 	self.TransStart()
 	self.lock.Unlock()
@@ -121,6 +123,7 @@ func (self *Stream) AddReader(r av.ReadCloser) {
 
 func (self *Stream) AddWriter(w av.WriteCloser) {
 	self.lock.Lock()
+	log.Println("w", w)
 	info := w.Info()
 	pw := &PackWriterCloser{
 		w: w,

@@ -63,6 +63,7 @@ type ConnServer struct {
 	ConnInfo      ConnectInfo
 	PublishInfo   PublishInfo
 	decoder       *amf.Decoder
+	encoder       *amf.Encoder
 	transactionID float64
 }
 
@@ -71,7 +72,28 @@ func NewConnServer(conn *Conn) *ConnServer {
 		conn:     conn,
 		streamID: 1,
 		decoder:  &amf.Decoder{},
+		encoder:  &amf.Encoder{},
 	}
+}
+
+func (self *ConnServer) writeMsg(csid, streamID uint32, args ...interface{}) error {
+	w := bytes.NewBuffer(nil)
+	for _, v := range args {
+		if _, err := self.encoder.Encode(w, v, amf.AMF0); err != nil {
+			return err
+		}
+	}
+	c := ChunkStream{
+		Format:    0,
+		CSID:      csid,
+		Timestamp: 0,
+		TypeID:    20,
+		StreamID:  streamID,
+		Length:    uint32(len(w.Bytes())),
+		Data:      w.Bytes(),
+	}
+	self.conn.Write(&c)
+	return self.conn.Flush()
 }
 
 func (self *ConnServer) connect(r io.Reader, amfType amf.Version) error {
@@ -124,9 +146,6 @@ func (self *ConnServer) connectResp(cur *ChunkStream) error {
 	c = self.conn.NewSetChunkSize(uint32(1024))
 	self.conn.Write(&c)
 
-	w := bytes.NewBuffer(nil)
-	encoder := &amf.Encoder{}
-
 	resp := make(amf.Object)
 	resp["fmsVer"] = "FMS/3,0,1,123"
 	resp["capabilities"] = 31
@@ -136,21 +155,7 @@ func (self *ConnServer) connectResp(cur *ChunkStream) error {
 	event["code"] = "NetConnection.Connect.Success"
 	event["description"] = "Connection succeeded."
 	event["objectEncoding"] = self.ConnInfo.ObjectEncoding
-
-	if _, err := encoder.EncodeBatch(w, amf.AMF0, "_result", self.transactionID, resp, event); err != nil {
-		return err
-	}
-	c = ChunkStream{
-		Format:    0,
-		CSID:      cur.CSID,
-		Timestamp: 0,
-		TypeID:    20,
-		StreamID:  cur.StreamID,
-		Length:    uint32(len(w.Bytes())),
-		Data:      w.Bytes(),
-	}
-	self.conn.Write(&c)
-	return self.conn.Flush()
+	return self.writeMsg(cur.CSID, cur.StreamID, "_result", self.transactionID, resp, event)
 }
 
 func (self *ConnServer) createStream(r io.Reader, amfType amf.Version) error {
@@ -170,23 +175,7 @@ func (self *ConnServer) createStream(r io.Reader, amfType amf.Version) error {
 }
 
 func (self *ConnServer) createStreamResp(cur *ChunkStream) error {
-	w := bytes.NewBuffer(nil)
-	encoder := &amf.Encoder{}
-
-	if _, err := encoder.EncodeBatch(w, amf.AMF0, "_result", self.transactionID, nil, self.streamID); err != nil {
-		return err
-	}
-	c := ChunkStream{
-		Format:    0,
-		CSID:      cur.CSID,
-		Timestamp: 0,
-		TypeID:    20,
-		StreamID:  cur.StreamID,
-		Length:    uint32(len(w.Bytes())),
-		Data:      w.Bytes(),
-	}
-	self.conn.Write(&c)
-	return self.conn.Flush()
+	return self.writeMsg(cur.CSID, cur.StreamID, "_result", self.transactionID, nil, self.streamID)
 }
 
 func (self *ConnServer) publishOrPlay(r io.Reader, cmdName string, amfType amf.Version) error {
@@ -236,32 +225,14 @@ func (self *ConnServer) publishOrPlay(r io.Reader, cmdName string, amfType amf.V
 }
 
 func (self *ConnServer) publishResp(cur *ChunkStream) error {
-	w := bytes.NewBuffer(nil)
-	encoder := &amf.Encoder{}
-
 	event := make(amf.Object)
 	event["level"] = "status"
 	event["code"] = "NetStream.Publish.Start"
 	event["description"] = "Start publising."
-	if _, err := encoder.EncodeBatch(w, amf.AMF0, "onStatus", 0, nil, event); err != nil {
-		return err
-	}
-	c := ChunkStream{
-		Format:    0,
-		CSID:      cur.CSID,
-		Timestamp: 0,
-		TypeID:    20,
-		StreamID:  cur.StreamID,
-		Length:    uint32(len(w.Bytes())),
-		Data:      w.Bytes(),
-	}
-	self.conn.Write(&c)
-	return self.conn.Flush()
+	return self.writeMsg(cur.CSID, cur.StreamID, "onStatus", 0, nil, event)
 }
 
 func (self *ConnServer) playResp(cur *ChunkStream) error {
-	encoder := &amf.Encoder{}
-
 	self.conn.SetRecorded()
 	self.conn.SetBegin()
 
@@ -269,74 +240,30 @@ func (self *ConnServer) playResp(cur *ChunkStream) error {
 	event["level"] = "status"
 	event["code"] = "NetStream.Play.Reset"
 	event["description"] = "Playing and resetting stream."
-	w := bytes.NewBuffer(nil)
-	if _, err := encoder.EncodeBatch(w, amf.AMF0, "onStatus", 0, nil, event); err != nil {
+	if err := self.writeMsg(cur.CSID, cur.StreamID, "onStatus", 0, nil, event); err != nil {
 		return err
 	}
-	c := ChunkStream{
-		Format:    0,
-		CSID:      cur.CSID,
-		Timestamp: 0,
-		TypeID:    20,
-		StreamID:  cur.StreamID,
-		Length:    uint32(len(w.Bytes())),
-		Data:      w.Bytes(),
-	}
-	self.conn.Write(&c)
 
 	event["level"] = "status"
 	event["code"] = "NetStream.Play.Start"
 	event["description"] = "Started playing stream."
-	w = bytes.NewBuffer(nil)
-	if _, err := encoder.EncodeBatch(w, amf.AMF0, "onStatus", 0, nil, event); err != nil {
+	if err := self.writeMsg(cur.CSID, cur.StreamID, "onStatus", 0, nil, event); err != nil {
 		return err
 	}
-	c = ChunkStream{
-		Format:    0,
-		CSID:      cur.CSID,
-		Timestamp: 0,
-		TypeID:    20,
-		StreamID:  cur.StreamID,
-		Length:    uint32(len(w.Bytes())),
-		Data:      w.Bytes(),
-	}
-	self.conn.Write(&c)
 
 	event["level"] = "status"
 	event["code"] = "NetStream.Data.Start"
 	event["description"] = "Started playing stream."
-	w = bytes.NewBuffer(nil)
-	if _, err := encoder.EncodeBatch(w, amf.AMF0, "onStatus", 0, nil, event); err != nil {
+	if err := self.writeMsg(cur.CSID, cur.StreamID, "onStatus", 0, nil, event); err != nil {
 		return err
 	}
-	c = ChunkStream{
-		Format:    0,
-		CSID:      cur.CSID,
-		Timestamp: 0,
-		TypeID:    20,
-		StreamID:  cur.StreamID,
-		Length:    uint32(len(w.Bytes())),
-		Data:      w.Bytes(),
-	}
-	self.conn.Write(&c)
 
 	event["level"] = "status"
 	event["code"] = "NetStream.Play.PublishNotify"
 	event["description"] = "Started playing notify."
-	w = bytes.NewBuffer(nil)
-	if _, err := encoder.EncodeBatch(w, amf.AMF0, "onStatus", 0, nil, event); err != nil {
+	if err := self.writeMsg(cur.CSID, cur.StreamID, "onStatus", 0, nil, event); err != nil {
 		return err
 	}
-	c = ChunkStream{
-		Format:    0,
-		CSID:      cur.CSID,
-		Timestamp: 0,
-		TypeID:    20,
-		StreamID:  cur.StreamID,
-		Length:    uint32(len(w.Bytes())),
-		Data:      w.Bytes(),
-	}
-	self.conn.Write(&c)
 
 	return self.conn.Flush()
 }
@@ -430,7 +357,13 @@ func (self *ConnServer) Write(c ChunkStream) error {
 }
 
 func (self *ConnServer) Read(c *ChunkStream) (err error) {
-	err = self.conn.Read(c)
+	return self.conn.Read(c)
+}
+
+func (self *ConnServer) GetInfo() (app string, name string, url string) {
+	app = self.ConnInfo.App
+	name = self.PublishInfo.Name
+	url = self.ConnInfo.TcUrl + "/" + self.PublishInfo.Name
 	return
 }
 
