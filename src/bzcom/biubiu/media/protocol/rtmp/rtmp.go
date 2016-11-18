@@ -11,11 +11,13 @@ import (
 
 type Client struct {
 	handler av.Handler
+	getter  av.GetWriter
 }
 
-func NewRtmpClient(h av.Handler) *Client {
+func NewRtmpClient(h av.Handler, getter av.GetWriter) *Client {
 	return &Client{
 		handler: h,
+		getter:  getter,
 	}
 }
 
@@ -30,17 +32,23 @@ func (self *Client) Dial(url string, method string) error {
 	} else if method == av.PLAY {
 		reader := NewVirReader(connClient)
 		self.handler.HandleReader(reader)
+		if self.getter != nil {
+			writer := self.getter.GetWriter(reader.Info())
+			self.handler.HandleWriter(writer)
+		}
 	}
 	return nil
 }
 
 type Server struct {
 	handler av.Handler
+	getter  av.GetWriter
 }
 
-func NewRtmpServer(h av.Handler) *Server {
+func NewRtmpServer(h av.Handler, getter av.GetWriter) *Server {
 	return &Server{
 		handler: h,
+		getter:  getter,
 	}
 }
 
@@ -71,6 +79,10 @@ func (self *Server) handleConn(conn *core.Conn) error {
 	if connServer.IsPublisher() {
 		reader := NewVirReader(connServer)
 		self.handler.HandleReader(reader)
+		if self.getter != nil {
+			writer := self.getter.GetWriter(reader.Info())
+			self.handler.HandleWriter(writer)
+		}
 	} else {
 		writer := NewVirWriter(connServer)
 		self.handler.HandleWriter(writer)
@@ -170,7 +182,7 @@ func (self *VirReader) Read(p *av.Packet) (err error) {
 	p.IsMetadata = (cs.TypeID == av.TAG_SCRIPTDATAAMF0 || cs.TypeID == av.TAG_SCRIPTDATAAMF3)
 	p.Data = cs.Data
 	p.TimeStamp = cs.Timestamp
-	self.demuxer.Demux(p)
+	self.demuxer.DemuxH(p)
 	return err
 }
 

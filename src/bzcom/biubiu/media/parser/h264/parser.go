@@ -224,10 +224,6 @@ func (self *Parser) Parse(b []byte, isSeq bool, w io.Writer) (err error) {
 	case true:
 		err = self.parseSpecificInfo(b)
 	case false:
-		if _, err = self.naluSize(b); err != nil {
-			return err
-		}
-		b = b[naluBytesLen:]
 		// is annexb
 		if self.isNaluHeader(b) {
 			_, err = w.Write(b)

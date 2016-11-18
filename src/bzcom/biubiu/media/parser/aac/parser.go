@@ -55,7 +55,6 @@ func (self *Parser) specificInfo(src []byte) error {
 	self.cfgInfo.objectType = (src[0] >> 3) & 0xff
 	self.cfgInfo.sampleRate = ((src[0] & 0x07) << 1) | src[1]>>7
 	self.cfgInfo.channel = (src[1] >> 3) & 0x0f
-
 	return nil
 }
 

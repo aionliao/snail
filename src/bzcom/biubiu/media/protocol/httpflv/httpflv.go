@@ -5,7 +5,6 @@ import (
 	"bzcom/biubiu/media/protocol/amf"
 	"bzcom/biubiu/media/utils/pio"
 	"bzcom/biubiu/media/utils/uid"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -21,16 +20,12 @@ func NewServer(h av.Handler) *Server {
 	}
 }
 
-func (self *Server) Serve(addr string) error {
+func (self *Server) Serve(l net.Listener) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		self.handleConn(w, r)
 	})
-	listen, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-	http.Serve(listen, mux)
+	http.Serve(l, mux)
 	return nil
 }
 
@@ -131,7 +126,6 @@ func (self *FLVWriter) Wait() {
 	for {
 		select {
 		case <-self.closed:
-			log.Println("return")
 			return
 		default:
 		}

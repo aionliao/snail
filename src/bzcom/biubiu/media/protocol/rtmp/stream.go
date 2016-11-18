@@ -147,7 +147,7 @@ func (self *Stream) TransStart() {
 			self.cache.Write(&p)
 
 			self.lock.Lock()
-			//log.Println("ssss", self.ws)
+
 			for k, v := range self.ws {
 				if !v.init {
 					if err = self.cache.Send(v.w); err != nil {

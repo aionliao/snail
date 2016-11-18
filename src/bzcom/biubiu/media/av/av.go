@@ -1,9 +1,6 @@
 package av
 
-import (
-	"io"
-	"time"
-)
+import "io"
 
 const (
 	TAG_AUDIO          = 8
@@ -101,6 +98,10 @@ type CodecParser interface {
 	Parse(*Packet, io.Writer) error
 }
 
+type GetWriter interface {
+	GetWriter(Info) WriteCloser
+}
+
 type Handler interface {
 	HandleReader(ReadCloser)
 	HandleWriter(WriteCloser)
@@ -115,10 +116,19 @@ type Closer interface {
 	Close(error)
 }
 
+type CalcTime interface {
+	CalcBaseTimestamp()
+}
+
 type Info struct {
-	Key string
-	URL string
-	UID string
+	Key   string
+	URL   string
+	UID   string
+	Inter bool
+}
+
+func (self Info) IsInterval() bool {
+	return self.Inter
 }
 
 type ReadCloser interface {
@@ -130,47 +140,6 @@ type ReadCloser interface {
 type WriteCloser interface {
 	Closer
 	Alive
-	CalcBaseTimestamp()
+	CalcTime
 	Write(Packet) error
-}
-
-type RWBaser struct {
-	PreTime            time.Time
-	BaseTimestamp      uint32
-	LastVideoTimestamp uint32
-	LastAudioTimestamp uint32
-}
-
-func NewRWBaser() RWBaser {
-	return RWBaser{
-		PreTime: time.Now(),
-	}
-}
-
-func (self *RWBaser) BaseTimeStamp() uint32 {
-	return self.BaseTimestamp
-}
-
-func (self *RWBaser) CalcBaseTimestamp() {
-	if self.LastAudioTimestamp > self.LastVideoTimestamp {
-		self.BaseTimestamp = self.LastAudioTimestamp
-	} else {
-		self.BaseTimestamp = self.LastVideoTimestamp
-	}
-}
-
-func (self *RWBaser) RecTimeStamp(timestamp, typeID uint32) {
-	if typeID == TAG_VIDEO {
-		self.LastVideoTimestamp = timestamp
-	} else if typeID == TAG_AUDIO {
-		self.LastAudioTimestamp = timestamp
-	}
-}
-
-func (self *RWBaser) SetPreTime() {
-	self.PreTime = time.Now()
-}
-
-func (self *RWBaser) Alive() bool {
-	return !(time.Now().Sub(self.PreTime) >= time.Second*10)
 }

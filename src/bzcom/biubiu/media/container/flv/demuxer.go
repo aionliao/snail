@@ -9,14 +9,25 @@ func NewDemuxer() *Demuxer {
 	return &Demuxer{}
 }
 
-// Demux,parse flv tag data and return tag which  has data
-func (self *Demuxer) Demux(p *av.Packet) (*av.Packet, error) {
+func (self *Demuxer) DemuxH(p *av.Packet) error {
 	var tag Tag
 	_, err := tag.ParseMeidaTagHeader(p.Data, p.IsVideo)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	p.Header = &tag
 
-	return p, nil
+	return nil
+}
+
+func (self *Demuxer) Demux(p *av.Packet) error {
+	var tag Tag
+	n, err := tag.ParseMeidaTagHeader(p.Data, p.IsVideo)
+	if err != nil {
+		return err
+	}
+	p.Header = &tag
+	p.Data = p.Data[n:]
+
+	return nil
 }

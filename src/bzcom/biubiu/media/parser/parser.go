@@ -1,4 +1,4 @@
-package codec
+package parser
 
 import (
 	"bzcom/biubiu/media/av"

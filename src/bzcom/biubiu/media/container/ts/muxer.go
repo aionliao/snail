@@ -217,8 +217,8 @@ func (self *Muxer) PMT(soundFormat byte, hasVideo bool) []byte {
 	tsHeader[3] |= self.pmtCc & 0x0f
 	self.pmtCc++
 
-	if soundFormat == av.SOUND_AAC ||
-		soundFormat == av.SOUND_MP3 {
+	if soundFormat == 2 ||
+		soundFormat == 14 {
 		if hasVideo {
 			progInfo[5] = 0x4
 		} else {
