@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"bzcom/biubiu/media/av"
 	"bzcom/biubiu/media/protocol/amf"
 	"fmt"
 	"log"
@@ -20,15 +21,15 @@ var (
 
 type ConnClient struct {
 	done       bool
+	transID    int
 	url        string
 	tcurl      string
 	app        string
 	title      string
 	query      string
-	conn       *Conn
-	transID    int
 	curcmdName string
 	streamid   uint32
+	conn       *Conn
 	encoder    *amf.Encoder
 	decoder    *amf.Decoder
 }
@@ -215,11 +216,11 @@ func (self *ConnClient) Start(url string, method string) error {
 	if err := self.writeCreateStreamMsg(); err != nil {
 		return err
 	}
-	if method == "publish" {
+	if method == av.PUBLISH {
 		if err := self.writePublishMsg(); err != nil {
 			return err
 		}
-	} else if method == "play" {
+	} else if method == av.PLAY {
 		if err := self.writePlayMsg(); err != nil {
 			return err
 		}
@@ -229,6 +230,14 @@ func (self *ConnClient) Start(url string, method string) error {
 }
 
 func (self *ConnClient) Write(c ChunkStream) error {
+	if c.TypeID == av.TAG_SCRIPTDATAAMF0 ||
+		c.TypeID == av.TAG_SCRIPTDATAAMF3 {
+		var err error
+		if c.Data, err = amf.MetaDataReform(c.Data, amf.ADD); err != nil {
+			return err
+		}
+		c.Length = uint32(len(c.Data))
+	}
 	return self.conn.Write(&c)
 }
 

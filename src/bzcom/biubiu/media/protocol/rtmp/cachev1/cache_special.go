@@ -1,28 +1,6 @@
 package cachev1
 
-import (
-	"bytes"
-	"bzcom/biubiu/media/av"
-	"log"
-
-	"bzcom/biubiu/media/protocol/amf"
-)
-
-const (
-	SetDataFrame string = "@setDataFrame"
-	OnMetaData   string = "onMetaData"
-)
-
-var setFrameFrame []byte
-
-func init() {
-	b := bytes.NewBuffer(nil)
-	encoder := &amf.Encoder{}
-	if _, err := encoder.Encode(b, SetDataFrame, amf.AMF0); err != nil {
-		log.Fatal(err)
-	}
-	setFrameFrame = b.Bytes()
-}
+import "bzcom/biubiu/media/av"
 
 type SpecialData struct {
 	full bool
@@ -47,9 +25,6 @@ func (self *SpecialData) Write(p *av.Packet) {
 func (self *SpecialData) Send(w av.WriteCloser) error {
 	if !self.full {
 		return nil
-	}
-	if self.p.IsMetadata {
-		self.p.Data = self.p.Data[len(setFrameFrame):]
 	}
 	return w.Write(self.p)
 }

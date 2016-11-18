@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"bzcom/biubiu/media/av"
 	"bzcom/biubiu/media/protocol/amf"
 	"io"
 	"log"
@@ -353,6 +354,14 @@ func (self *ConnServer) IsPublisher() bool {
 }
 
 func (self *ConnServer) Write(c ChunkStream) error {
+	if c.TypeID == av.TAG_SCRIPTDATAAMF0 ||
+		c.TypeID == av.TAG_SCRIPTDATAAMF3 {
+		var err error
+		if c.Data, err = amf.MetaDataReform(c.Data, amf.DEL); err != nil {
+			return err
+		}
+		c.Length = uint32(len(c.Data))
+	}
 	return self.conn.Write(&c)
 }
 

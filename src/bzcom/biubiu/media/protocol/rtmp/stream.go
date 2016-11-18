@@ -4,7 +4,6 @@ import (
 	"bzcom/biubiu/media/av"
 	"bzcom/biubiu/media/protocol/rtmp/cachev1"
 	"errors"
-	"log"
 	"sync"
 	"time"
 )
@@ -107,7 +106,7 @@ func (self *Stream) Copy(dst *Stream) {
 	self.lock.Lock()
 	for k, v := range self.ws {
 		delete(self.ws, k)
-		v.w.Reset()
+		v.w.CalcBaseTimestamp()
 		dst.AddWriter(v.w)
 	}
 	self.lock.Unlock()
@@ -115,7 +114,6 @@ func (self *Stream) Copy(dst *Stream) {
 
 func (self *Stream) AddReader(r av.ReadCloser) {
 	self.lock.Lock()
-	log.Println("www", r)
 	self.r = r
 	self.TransStart()
 	self.lock.Unlock()
@@ -123,8 +121,8 @@ func (self *Stream) AddReader(r av.ReadCloser) {
 
 func (self *Stream) AddWriter(w av.WriteCloser) {
 	self.lock.Lock()
-	log.Println("w", w)
 	info := w.Info()
+
 	pw := &PackWriterCloser{
 		w: w,
 	}
@@ -146,10 +144,10 @@ func (self *Stream) TransStart() {
 				// TODO: close special writer
 				return
 			}
-
 			self.cache.Write(&p)
 
 			self.lock.Lock()
+			//log.Println("ssss", self.ws)
 			for k, v := range self.ws {
 				if !v.init {
 					if err = self.cache.Send(v.w); err != nil {
@@ -181,11 +179,14 @@ func (self *Stream) CheckAlive() (n int) {
 	if self.r != nil && self.isStart {
 		if self.r.Alive() {
 			n++
+		} else {
+			self.r.Close(errors.New("read timeout"))
 		}
 	}
 	for k, v := range self.ws {
 		if !v.w.Alive() {
 			delete(self.ws, k)
+			v.w.Close(errors.New("write timeout"))
 			continue
 		}
 		n++

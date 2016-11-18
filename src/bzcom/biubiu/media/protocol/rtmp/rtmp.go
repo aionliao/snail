@@ -5,7 +5,6 @@ import (
 	"bzcom/biubiu/media/container/flv"
 	"bzcom/biubiu/media/protocol/rtmp/core"
 	"bzcom/biubiu/media/utils/uid"
-	"errors"
 	"net"
 	"time"
 )
@@ -25,10 +24,10 @@ func (self *Client) Dial(url string, method string) error {
 	if err := connClient.Start(url, method); err != nil {
 		return err
 	}
-	if method == "publish" {
+	if method == av.PUBLISH {
 		writer := NewVirWriter(connClient)
 		self.handler.HandleWriter(writer)
-	} else if method == "play" {
+	} else if method == av.PLAY {
 		reader := NewVirReader(connClient)
 		self.handler.HandleReader(reader)
 	}
@@ -91,52 +90,15 @@ type StreamReadWriteCloser interface {
 	Read(c *core.ChunkStream) error
 }
 
-type RWBaser struct {
-	t  time.Time
-	RW StreamReadWriteCloser
-}
-
-func NewRWBaser(rw StreamReadWriteCloser) RWBaser {
-	return RWBaser{
-		t:  time.Now(),
-		RW: rw,
-	}
-}
-
-func (self *RWBaser) Info() (ret av.Info) {
-	ret.UID = uid.NEWID()
-	app, title, url := self.RW.GetInfo()
-	ret.URL = url
-	ret.Key = app + "/" + title
-	return
-}
-
-func (self *RWBaser) Close(err error) {
-	self.RW.Close(err)
-}
-
-func (self *RWBaser) Alive() bool {
-	if time.Now().Sub(self.t) >= time.Second*30 {
-		self.RW.Close(errors.New("read timeout"))
-		return false
-	}
-	return true
-}
-
-func (self *RWBaser) SetT() {
-	self.t = time.Now()
-}
-
 type VirWriter struct {
-	RWBaser
-	lastVideoTs uint32
-	lastAudioTs uint32
-	maxTs       uint32
+	av.RWBaser
+	conn StreamReadWriteCloser
 }
 
 func NewVirWriter(conn StreamReadWriteCloser) *VirWriter {
 	return &VirWriter{
-		RWBaser: NewRWBaser(conn),
+		conn:    conn,
+		RWBaser: av.NewRWBaser(),
 	}
 }
 
@@ -146,39 +108,45 @@ func (self *VirWriter) Write(p av.Packet) error {
 	cs.Length = uint32(len(p.Data))
 	cs.StreamID = 1
 	cs.Timestamp = p.TimeStamp
-	cs.Timestamp += self.maxTs
+	cs.Timestamp += self.BaseTimeStamp()
 
 	if p.IsVideo {
-		self.lastVideoTs = cs.Timestamp
 		cs.TypeID = av.TAG_VIDEO
 	} else {
 		if p.IsMetadata {
 			cs.TypeID = av.TAG_SCRIPTDATAAMF0
 		} else {
-			self.lastAudioTs = cs.Timestamp
 			cs.TypeID = av.TAG_AUDIO
 		}
 	}
-	self.SetT()
-	return self.RW.Write(cs)
+
+	self.SetPreTime()
+	self.RecTimeStamp(cs.Timestamp, cs.TypeID)
+	return self.conn.Write(cs)
 }
 
-func (self *VirWriter) Reset() {
-	if self.lastAudioTs > self.lastVideoTs {
-		self.maxTs = self.lastAudioTs
-	} else {
-		self.maxTs = self.lastVideoTs
-	}
+func (self *VirWriter) Info() (ret av.Info) {
+	ret.UID = uid.NEWID()
+	app, title, url := self.conn.GetInfo()
+	ret.URL = url
+	ret.Key = app + "/" + title
+	return
+}
+
+func (self *VirWriter) Close(err error) {
+	self.conn.Close(err)
 }
 
 type VirReader struct {
+	av.RWBaser
 	demuxer *flv.Demuxer
-	RWBaser
+	conn    StreamReadWriteCloser
 }
 
 func NewVirReader(conn StreamReadWriteCloser) *VirReader {
 	return &VirReader{
-		RWBaser: NewRWBaser(conn),
+		conn:    conn,
+		RWBaser: av.NewRWBaser(),
 		demuxer: flv.NewDemuxer(),
 	}
 }
@@ -186,7 +154,7 @@ func NewVirReader(conn StreamReadWriteCloser) *VirReader {
 func (self *VirReader) Read(p *av.Packet) (err error) {
 	var cs core.ChunkStream
 	for {
-		err = self.RW.Read(&cs)
+		err = self.conn.Read(&cs)
 		if err != nil {
 			return err
 		}
@@ -197,11 +165,23 @@ func (self *VirReader) Read(p *av.Packet) (err error) {
 			break
 		}
 	}
-	self.SetT()
+	self.SetPreTime()
 	p.IsVideo = cs.TypeID == av.TAG_VIDEO
 	p.IsMetadata = (cs.TypeID == av.TAG_SCRIPTDATAAMF0 || cs.TypeID == av.TAG_SCRIPTDATAAMF3)
 	p.Data = cs.Data
 	p.TimeStamp = cs.Timestamp
 	self.demuxer.Demux(p)
 	return err
+}
+
+func (self *VirReader) Info() (ret av.Info) {
+	ret.UID = uid.NEWID()
+	app, title, url := self.conn.GetInfo()
+	ret.URL = url
+	ret.Key = app + "/" + title
+	return
+}
+
+func (self *VirReader) Close(err error) {
+	self.conn.Close(err)
 }
