@@ -1,5 +1,8 @@
 package hls
 
+/**
+  hls ,semi-finished products
+*/
 import (
 	"bytes"
 	"bzcom/biubiu/media/av"
