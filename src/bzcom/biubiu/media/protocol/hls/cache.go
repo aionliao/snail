@@ -7,7 +7,7 @@ const (
 	audio_cache_len  int  = 10 * 1024
 )
 
-type AudioCache struct {
+type audioCache struct {
 	soundFormat byte
 	num         byte
 	offset      int
@@ -15,30 +15,30 @@ type AudioCache struct {
 	buf         *bytes.Buffer
 }
 
-func NewAudioCache() *AudioCache {
-	return &AudioCache{
+func newAudioCache() *audioCache {
+	return &audioCache{
 		buf: bytes.NewBuffer(make([]byte, audio_cache_len)),
 	}
 }
 
-func (a *AudioCache) Cache(src []byte, pts uint64) bool {
-	if a.num == 0 {
-		a.offset = 0
-		a.pts = pts
-		a.buf.Reset()
+func (self *audioCache) Cache(src []byte, pts uint64) bool {
+	if self.num == 0 {
+		self.offset = 0
+		self.pts = pts
+		self.buf.Reset()
 	}
-	a.buf.Write(src)
-	a.offset += len(src)
-	a.num++
+	self.buf.Write(src)
+	self.offset += len(src)
+	self.num++
 
 	return false
 }
 
-func (a *AudioCache) GetFrame() (int, uint64, []byte) {
-	a.num = 0
-	return a.offset, a.pts, a.buf.Bytes()
+func (self *audioCache) GetFrame() (int, uint64, []byte) {
+	self.num = 0
+	return self.offset, self.pts, self.buf.Bytes()
 }
 
-func (a *AudioCache) CacheNum() byte {
-	return a.num
+func (self *audioCache) CacheNum() byte {
+	return self.num
 }

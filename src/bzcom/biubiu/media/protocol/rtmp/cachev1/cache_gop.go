@@ -46,7 +46,7 @@ func (self *signed) do(p *av.Packet) bool {
 				flag = true
 			}
 		}
-		interval := self.getTimeDiffInterval()
+		interval := self.timeInterval()
 		if (!self.hasVideo && interval >= int64(self.interval/time.Millisecond)) ||
 			(self.hasVideo && interval >= int64(self.maxDuration/time.Millisecond)) {
 			flag = true
@@ -69,7 +69,7 @@ func (self *signed) do(p *av.Packet) bool {
 	return sign
 }
 
-func (self *signed) getTimeDiffInterval() int64 {
+func (self *signed) timeInterval() int64 {
 	diff := self.curTs - self.firstTs
 	if diff < 0 {
 		tmpdiff := int64(0)
