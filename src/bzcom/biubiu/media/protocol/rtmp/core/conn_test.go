@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"bzcom/biubiu/media/utils/pool"
 	"io"
 	"testing"
 
@@ -21,6 +22,7 @@ func TestConnReadNormal(t *testing.T) {
 	data = append(data, 0xc6)
 	data = append(data, data2...)
 	conn := &Conn{
+		pool:                pool.NewPool(),
 		rw:                  NewReadWriter(bytes.NewBuffer(data), 1024),
 		remoteChunkSize:     128,
 		windowAckSize:       2500000,
@@ -66,6 +68,7 @@ func TestConnCrossReading(t *testing.T) {
 	videoData = append(videoData, data2...)
 
 	conn := &Conn{
+		pool:                pool.NewPool(),
 		rw:                  NewReadWriter(bytes.NewBuffer(videoData), 1024),
 		remoteChunkSize:     128,
 		windowAckSize:       2500000,
@@ -103,6 +106,7 @@ func TestSetChunksizeForWrite(t *testing.T) {
 	buf := bytes.NewBuffer(nil)
 	rw := NewReadWriter(buf, 1024)
 	conn := &Conn{
+		pool:                pool.NewPool(),
 		rw:                  rw,
 		chunkSize:           128,
 		remoteChunkSize:     128,
@@ -154,6 +158,7 @@ func TestSetChunksize(t *testing.T) {
 	data = append(data, data2...)
 	rw := NewReadWriter(bytes.NewBuffer(data), 1024)
 	conn := &Conn{
+		pool:                pool.NewPool(),
 		rw:                  rw,
 		chunkSize:           128,
 		remoteChunkSize:     128,
@@ -201,6 +206,7 @@ func TestConnWrite(t *testing.T) {
 	wr := bytes.NewBuffer(nil)
 	readWriter := NewReadWriter(wr, 128)
 	conn := &Conn{
+		pool:                pool.NewPool(),
 		rw:                  readWriter,
 		chunkSize:           128,
 		remoteChunkSize:     128,

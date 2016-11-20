@@ -144,7 +144,7 @@ func (self *Stream) TransStart() {
 				// TODO: close special writer
 				return
 			}
-			self.cache.Write(&p)
+			self.cache.Write(p)
 
 			self.lock.Lock()
 

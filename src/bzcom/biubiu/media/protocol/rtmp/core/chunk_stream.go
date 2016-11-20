@@ -2,6 +2,7 @@ package core
 
 import (
 	"bzcom/biubiu/media/av"
+	"bzcom/biubiu/media/utils/pool"
 	"encoding/binary"
 	"fmt"
 )
@@ -26,15 +27,11 @@ func (self *ChunkStream) full() bool {
 	return self.got
 }
 
-func (self *ChunkStream) new() {
+func (self *ChunkStream) new(pool *pool.Pool) {
 	self.got = false
 	self.index = 0
 	self.remain = self.Length
-	if uint32(cap(self.Data)) < self.Length {
-		self.Data = make([]byte, self.Length)
-	} else {
-		self.Data = self.Data[:self.Length]
-	}
+	self.Data = pool.Get(int(self.Length))
 }
 
 func (self *ChunkStream) writeHeader(w *ReadWriter) error {
@@ -122,7 +119,7 @@ func (self *ChunkStream) writeChunk(w *ReadWriter, chunkSize int) error {
 
 }
 
-func (self *ChunkStream) readChunk(r *ReadWriter, chunkSize uint32) error {
+func (self *ChunkStream) readChunk(r *ReadWriter, chunkSize uint32, pool *pool.Pool) error {
 	if self.remain != 0 && self.tmpFromat != 3 {
 		return fmt.Errorf("inlaid remin = %d", self.remain)
 	}
@@ -148,7 +145,7 @@ func (self *ChunkStream) readChunk(r *ReadWriter, chunkSize uint32) error {
 		} else {
 			self.exted = false
 		}
-		self.new()
+		self.new(pool)
 	case 1:
 		self.Format = self.tmpFromat
 		timeStamp, _ := r.ReadUintBE(3)
@@ -162,7 +159,7 @@ func (self *ChunkStream) readChunk(r *ReadWriter, chunkSize uint32) error {
 		}
 		self.timeDelta = timeStamp
 		self.Timestamp += timeStamp
-		self.new()
+		self.new(pool)
 	case 2:
 		self.Format = self.tmpFromat
 		timeStamp, _ := r.ReadUintBE(3)
@@ -174,7 +171,7 @@ func (self *ChunkStream) readChunk(r *ReadWriter, chunkSize uint32) error {
 		}
 		self.timeDelta = timeStamp
 		self.Timestamp += timeStamp
-		self.new()
+		self.new(pool)
 	case 3:
 		if self.remain == 0 {
 			switch self.Format {
@@ -192,7 +189,7 @@ func (self *ChunkStream) readChunk(r *ReadWriter, chunkSize uint32) error {
 				}
 				self.Timestamp += timedet
 			}
-			self.new()
+			self.new(pool)
 		} else {
 			if self.exted {
 				b, err := r.Peek(4)

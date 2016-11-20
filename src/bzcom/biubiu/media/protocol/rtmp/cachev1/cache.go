@@ -10,10 +10,10 @@ import (
 )
 
 type Cache struct {
-	gop                *Gop
-	videoSeq           *SpecialData
-	audioSeq           *SpecialData
-	metadata           *SpecialData
+	gop                *GopCache
+	videoSeq           *SpecialCache
+	audioSeq           *SpecialCache
+	metadata           *SpecialCache
 	lock               sync.RWMutex
 	hasSefaultMinTs    bool
 	lastVideoTimestamp uint32
@@ -22,14 +22,14 @@ type Cache struct {
 
 func NewCache() *Cache {
 	return &Cache{
-		gop:      NewGop(2),
-		videoSeq: NewSpecialData(),
-		audioSeq: NewSpecialData(),
-		metadata: NewSpecialData(),
+		gop:      NewGopCache(2),
+		videoSeq: NewSpecialCache(),
+		audioSeq: NewSpecialCache(),
+		metadata: NewSpecialCache(),
 	}
 }
 
-func (self *Cache) Write(p *av.Packet) {
+func (self *Cache) Write(p av.Packet) {
 	if p.IsMetadata {
 		self.metadata.Write(p)
 		return

@@ -44,7 +44,8 @@ var (
 	naluBodyLenError  = errors.New("nalu body len error")
 )
 
-var naluIndication = []byte{0x00, 0x00, 0x00, 0x01, 0x09, 0xf0}
+var startCode = []byte{0x00, 0x00, 0x00, 0x01}
+var naluAud = []byte{0x00, 0x00, 0x00, 0x01, 0x09, 0xf0}
 
 type Parser struct {
 	frameType    byte
@@ -79,7 +80,7 @@ func (self *Parser) parseSpecificInfo(src []byte) error {
 	}
 	sps := []byte{}
 	pps := []byte{}
-	header := []byte{0x00, 0x00, 0x00, 0x01}
+
 	var seq sequenceHeader
 	seq.configVersion = src[0]
 	seq.avcProfileIndication = src[1]
@@ -96,7 +97,7 @@ func (self *Parser) parseSpecificInfo(src []byte) error {
 	if len(src[8:]) < seq.spsLen || seq.spsLen <= 0 {
 		return spsDataError
 	}
-	sps = append(sps, header...)
+	sps = append(sps, startCode...)
 	sps = append(sps, src[8:(8+seq.spsLen)]...)
 
 	//get pps
@@ -110,7 +111,7 @@ func (self *Parser) parseSpecificInfo(src []byte) error {
 		return ppsDataError
 	}
 
-	pps = append(pps, header...)
+	pps = append(pps, startCode...)
 	pps = append(pps, tmpBuf[3:]...)
 
 	self.specificInfo = append(self.specificInfo, sps...)
@@ -127,17 +128,6 @@ func (self *Parser) isNaluHeader(src []byte) bool {
 		src[1] == 0x00 &&
 		src[2] == 0x00 &&
 		src[3] == 0x01
-}
-
-func (self *Parser) setNaluHeader(src []byte) error {
-	if len(src) != naluBytesLen {
-		return naluHeaderInvalid
-	}
-	src[0] = 0x00
-	src[1] = 0x00
-	src[2] = 0x00
-	src[3] = 0x01
-	return nil
 }
 
 func (self *Parser) naluSize(src []byte) (int, error) {
@@ -158,7 +148,7 @@ func (self *Parser) getAnnexbH264(src []byte, w io.Writer) error {
 		return videoDataInvalid
 	}
 	self.pps.Reset()
-	_, err := w.Write(naluIndication)
+	_, err := w.Write(naluAud)
 	if err != nil {
 		return err
 	}
@@ -176,7 +166,6 @@ func (self *Parser) getAnnexbH264(src []byte, w io.Writer) error {
 		index += naluBytesLen
 		dataSize -= naluBytesLen
 		if dataSize >= nalLen && len(src[index:]) >= nalLen && nalLen > 0 {
-			self.setNaluHeader(src[index-naluBytesLen : index])
 			nalType := src[index] & 0x1f
 			switch nalType {
 			case nalu_type_aud:
@@ -197,7 +186,11 @@ func (self *Parser) getAnnexbH264(src []byte, w io.Writer) error {
 			case nalu_type_slice:
 				fallthrough
 			case nalu_type_sei:
-				_, err := w.Write(src[index-naluBytesLen : index+nalLen])
+				_, err := w.Write(startCode)
+				if err != nil {
+					return err
+				}
+				_, err = w.Write(src[index : index+nalLen])
 				if err != nil {
 					return err
 				}
@@ -205,7 +198,11 @@ func (self *Parser) getAnnexbH264(src []byte, w io.Writer) error {
 				fallthrough
 			case nalu_type_pps:
 				hasSpsPps = true
-				_, err := self.pps.Write(src[index-naluBytesLen : index+nalLen])
+				_, err := self.pps.Write(startCode)
+				if err != nil {
+					return err
+				}
+				_, err = self.pps.Write(src[index : index+nalLen])
 				if err != nil {
 					return err
 				}

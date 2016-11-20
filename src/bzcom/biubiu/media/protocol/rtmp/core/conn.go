@@ -2,6 +2,7 @@ package core
 
 import (
 	"bzcom/biubiu/media/utils/pio"
+	"bzcom/biubiu/media/utils/pool"
 	"encoding/binary"
 	"net"
 	"time"
@@ -26,6 +27,7 @@ type Conn struct {
 	received            uint32
 	ackReceived         uint32
 	rw                  *ReadWriter
+	pool                *pool.Pool
 	chunks              map[uint32]ChunkStream
 }
 
@@ -36,6 +38,7 @@ func NewConn(c net.Conn, bufferSize int) *Conn {
 		remoteChunkSize:     128,
 		windowAckSize:       2500000,
 		remoteWindowAckSize: 2500000,
+		pool:                pool.NewPool(),
 		rw:                  NewReadWriter(c, bufferSize),
 		chunks:              make(map[uint32]ChunkStream),
 	}
@@ -53,7 +56,7 @@ func (self *Conn) Read(c *ChunkStream) error {
 		}
 		cs.tmpFromat = format
 		cs.CSID = csid
-		err := cs.readChunk(self.rw, self.remoteChunkSize)
+		err := cs.readChunk(self.rw, self.remoteChunkSize, self.pool)
 		if err != nil {
 			return err
 		}

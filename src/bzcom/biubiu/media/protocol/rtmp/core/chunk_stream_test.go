@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"bzcom/biubiu/media/utils/pool"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,7 +28,7 @@ func TestChunkRead1(t *testing.T) {
 		h, _ := rw.ReadUintBE(1)
 		chunkinc.tmpFromat = h >> 6
 		chunkinc.CSID = h & 0x3f
-		chunkinc.readChunk(rw, 128)
+		chunkinc.readChunk(rw, 128, pool.NewPool())
 		if chunkinc.remain == 0 {
 			break
 		}
@@ -55,17 +56,17 @@ func TestChunkRead1(t *testing.T) {
 	h, _ := rw.ReadUintBE(1)
 	chunkinc.tmpFromat = h >> 6
 	chunkinc.CSID = h & 0x3f
-	chunkinc.readChunk(rw, 128)
+	chunkinc.readChunk(rw, 128, pool.NewPool())
 
 	h, _ = rw.ReadUintBE(1)
 	chunkinc.tmpFromat = h >> 6
 	chunkinc.CSID = h & 0x3f
-	chunkinc.readChunk(rw, 128)
+	chunkinc.readChunk(rw, 128, pool.NewPool())
 
 	h, _ = rw.ReadUintBE(1)
 	chunkinc.tmpFromat = h >> 6
 	chunkinc.CSID = h & 0x3f
-	chunkinc.readChunk(rw, 128)
+	chunkinc.readChunk(rw, 128, pool.NewPool())
 
 	at.Equal(int(chunkinc.Length), 307)
 	at.Equal(int(chunkinc.TypeID), 9)

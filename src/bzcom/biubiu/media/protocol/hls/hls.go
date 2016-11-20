@@ -1,16 +1,16 @@
 package hls
 
-/**
-  hls ,semi-finished products
-*/
 import (
 	"bytes"
 	"bzcom/biubiu/media/av"
 	"bzcom/biubiu/media/container/flv"
 	"bzcom/biubiu/media/container/ts"
 	"bzcom/biubiu/media/parser"
+	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"time"
 )
 
 type Server struct {
@@ -80,6 +80,9 @@ func (self *Source) segdo() {
 	if self.btswriter == nil {
 		self.btswriter = bytes.NewBuffer(nil)
 	} else if self.btswriter != nil && self.stat.durationMs() >= 5000 {
+		f, _ := os.Create(fmt.Sprintf("%d.ts", time.Now().Unix()))
+		f.Write(self.btswriter.Bytes())
+		f.Close()
 		self.flushAudio()
 		self.btswriter.Reset()
 		self.stat.resetAndNew()
@@ -131,7 +134,8 @@ func (self *Source) Write(p av.Packet) error {
 		return nil
 	}
 	self.SetPreTime()
-	if err := self.demuxer.Demux(&p); err != nil {
+	err := self.demuxer.Demux(&p)
+	if err != nil {
 		return err
 	}
 
@@ -158,7 +162,7 @@ func (self *Source) Write(p av.Packet) error {
 		}
 	}
 	self.bwriter.Reset()
-	err := self.tsparser.Parse(&p, self.bwriter)
+	err = self.tsparser.Parse(&p, self.bwriter)
 	if err != nil {
 		return err
 	}
