@@ -3,14 +3,16 @@ package av
 import "time"
 
 type RWBaser struct {
+	timeout            time.Duration
 	PreTime            time.Time
 	BaseTimestamp      uint32
 	LastVideoTimestamp uint32
 	LastAudioTimestamp uint32
 }
 
-func NewRWBaser() RWBaser {
+func NewRWBaser(duration time.Duration) RWBaser {
 	return RWBaser{
+		timeout: duration,
 		PreTime: time.Now(),
 	}
 }
@@ -40,5 +42,5 @@ func (self *RWBaser) SetPreTime() {
 }
 
 func (self *RWBaser) Alive() bool {
-	return !(time.Now().Sub(self.PreTime) >= time.Second*10)
+	return !(time.Now().Sub(self.PreTime) >= self.timeout)
 }

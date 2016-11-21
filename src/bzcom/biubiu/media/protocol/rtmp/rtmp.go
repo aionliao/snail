@@ -110,7 +110,7 @@ type VirWriter struct {
 func NewVirWriter(conn StreamReadWriteCloser) *VirWriter {
 	return &VirWriter{
 		conn:    conn,
-		RWBaser: av.NewRWBaser(),
+		RWBaser: av.NewRWBaser(time.Second * 10),
 	}
 }
 
@@ -158,7 +158,7 @@ type VirReader struct {
 func NewVirReader(conn StreamReadWriteCloser) *VirReader {
 	return &VirReader{
 		conn:    conn,
-		RWBaser: av.NewRWBaser(),
+		RWBaser: av.NewRWBaser(time.Second * 10),
 		demuxer: flv.NewDemuxer(),
 	}
 }

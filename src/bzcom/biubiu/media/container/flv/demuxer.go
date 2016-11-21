@@ -1,6 +1,13 @@
 package flv
 
-import "bzcom/biubiu/media/av"
+import (
+	"bzcom/biubiu/media/av"
+	"errors"
+)
+
+var (
+	ErrAvcEndSEQ = errors.New("avc end sequence")
+)
 
 type Demuxer struct {
 }
@@ -25,6 +32,10 @@ func (self *Demuxer) Demux(p *av.Packet) error {
 	n, err := tag.ParseMeidaTagHeader(p.Data, p.IsVideo)
 	if err != nil {
 		return err
+	}
+	if tag.CodecID() == av.VIDEO_H264 &&
+		p.Data[0] == 0x17 && p.Data[1] == 0x02 {
+		return ErrAvcEndSEQ
 	}
 	p.Header = &tag
 	p.Data = p.Data[n:]

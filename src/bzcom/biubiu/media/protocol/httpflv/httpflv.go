@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Server struct {
@@ -65,7 +66,7 @@ func NewFLVWriter(app, title, url string, ctx http.ResponseWriter) *FLVWriter {
 		title:   title,
 		url:     url,
 		ctx:     ctx,
-		RWBaser: av.NewRWBaser(),
+		RWBaser: av.NewRWBaser(time.Second * 10),
 		closed:  make(chan struct{}),
 		buf:     make([]byte, headerLen),
 	}

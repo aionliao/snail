@@ -1,7 +1,7 @@
 package hls
 
 const (
-	sync = 2 // ms
+	syncms = 2 // ms
 )
 
 type align struct {
@@ -19,7 +19,7 @@ func (self *align) align(dts *uint64, inc uint32) {
 		dPts = aFrameDts - estPts
 	}
 
-	if dPts <= uint64(sync)*h264_default_hz {
+	if dPts <= uint64(syncms)*h264_default_hz {
 		self.frameNum++
 		*dts = estPts
 		return

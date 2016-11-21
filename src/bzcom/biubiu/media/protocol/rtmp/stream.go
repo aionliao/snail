@@ -122,7 +122,6 @@ func (self *Stream) AddReader(r av.ReadCloser) {
 func (self *Stream) AddWriter(w av.WriteCloser) {
 	self.lock.Lock()
 	info := w.Info()
-
 	pw := &PackWriterCloser{
 		w: w,
 	}
@@ -136,12 +135,13 @@ func (self *Stream) TransStart() {
 		var p av.Packet
 		for {
 			if !self.isStart {
+				self.closeInter()
 				return
 			}
 			err := self.r.Read(&p)
 			if err != nil {
+				self.closeInter()
 				self.isStart = false
-				// TODO: close special writer
 				return
 			}
 			self.cache.Write(p)
@@ -169,7 +169,6 @@ func (self *Stream) TransStart() {
 func (self *Stream) TransStop() {
 	if self.isStart && self.r != nil {
 		self.r.Close(errors.New("stop old"))
-		// TODO: close special writer
 	}
 	self.isStart = false
 }
@@ -194,4 +193,15 @@ func (self *Stream) CheckAlive() (n int) {
 	self.lock.Unlock()
 
 	return
+}
+
+func (self *Stream) closeInter() {
+	self.lock.Lock()
+	for k, v := range self.ws {
+		if v.w.Info().IsInterval() {
+			v.w.Close(errors.New("close"))
+			delete(self.ws, k)
+		}
+	}
+	self.lock.Unlock()
 }
