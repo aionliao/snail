@@ -66,7 +66,7 @@ func (rw *ReadWriter) Flush() error {
 	if rw.writeError != nil {
 		return rw.writeError
 	}
-	//没有数据的情况下不调用刷新
+
 	if rw.ReadWriter.Writer.Buffered() == 0 {
 		return nil
 	}

@@ -4,19 +4,27 @@ import (
 	"bytes"
 	"bzcom/biubiu/media/av"
 	"bzcom/biubiu/media/protocol/amf"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net"
 	neturl "net/url"
-	"reflect"
 	"strings"
 )
 
 var (
-	connectSuccess = "NetConnection.Connect.Success"
+	respResult     = "_result"
+	respError      = "_error"
+	onStatus       = "onStatus"
 	publishStart   = "NetStream.Publish.Start"
 	playStart      = "NetStream.Play.Start"
+	connectSuccess = "NetConnection.Connect.Success"
+)
+
+var (
+	ErrFail = errors.New("respone err")
 )
 
 type ConnClient struct {
@@ -32,17 +40,19 @@ type ConnClient struct {
 	conn       *Conn
 	encoder    *amf.Encoder
 	decoder    *amf.Decoder
+	bytesw     *bytes.Buffer
 }
 
 func NewConnClient() *ConnClient {
 	return &ConnClient{
 		transID: 1,
+		bytesw:  bytes.NewBuffer(nil),
 		encoder: &amf.Encoder{},
 		decoder: &amf.Decoder{},
 	}
 }
 
-func (self *ConnClient) handleMsg() error {
+func (self *ConnClient) readRespMsg() error {
 	var err error
 	var rc ChunkStream
 	for {
@@ -52,60 +62,76 @@ func (self *ConnClient) handleMsg() error {
 		switch rc.TypeID {
 		case 20, 17:
 			r := bytes.NewReader(rc.Data)
-			v, err := self.decoder.Decode(r, amf.AMF0)
-			if err != nil {
+			vs, err := self.decoder.DecodeBatch(r, amf.AMF0)
+			if err != nil && err != io.EOF {
 				return err
 			}
-			switch v.(string) {
-			case "_result", "onStatus":
-				for {
-					v, err = self.decoder.Decode(r, amf.AMF0)
-					if err != nil {
-						break
+			for k, v := range vs {
+				switch v.(type) {
+				case string:
+					switch self.curcmdName {
+					case cmdConnect, cmdCreateStream:
+						if v.(string) != respResult {
+							return ErrFail
+						}
+					case cmdPublish:
+						if v.(string) != onStatus {
+							return ErrFail
+						}
 					}
-					switch v.(type) {
-					case amf.Object:
-						objMap := v.(amf.Object)
-						code, ok := objMap["code"]
-						if ok {
-							if code.(string) == connectSuccess ||
-								code.(string) == publishStart ||
-								code.(string) == playStart {
-								return nil
+				case float64:
+					switch self.curcmdName {
+					case cmdConnect, cmdCreateStream:
+						id := int(v.(float64))
+						if k == 1 {
+							if id != self.transID {
+								return ErrFail
 							}
+						} else if k == 3 {
+							self.streamid = uint32(id)
 						}
-					case float64:
-						if int(v.(float64)) == self.transID {
-							if self.curcmdName == cmdCreateStream {
-								return nil
-							}
+					case cmdPublish:
+						if int(v.(float64)) != 0 {
+							return ErrFail
 						}
-					default:
+					}
+				case amf.Object:
+					objmap := v.(amf.Object)
+					switch self.curcmdName {
+					case cmdConnect:
+						code, ok := objmap["code"]
+						if ok && code.(string) != connectSuccess {
+							return ErrFail
+						}
+					case cmdPublish:
+						code, ok := objmap["code"]
+						if ok && code.(string) != publishStart {
+							return ErrFail
+						}
 					}
 				}
-			case "onBWDone":
-			default:
-				return fmt.Errorf("_error")
 			}
+			return nil
 		}
 	}
 }
 
 func (self *ConnClient) writeMsg(args ...interface{}) error {
-	w := bytes.NewBuffer(nil)
+	self.bytesw.Reset()
 	for _, v := range args {
-		if _, err := self.encoder.Encode(w, v, amf.AMF0); err != nil {
+		if _, err := self.encoder.Encode(self.bytesw, v, amf.AMF0); err != nil {
 			return err
 		}
 	}
+	msg := self.bytesw.Bytes()
 	c := ChunkStream{
 		Format:    0,
 		CSID:      3,
 		Timestamp: 0,
 		TypeID:    20,
 		StreamID:  self.streamid,
-		Length:    uint32(len(w.Bytes())),
-		Data:      w.Bytes(),
+		Length:    uint32(len(msg)),
+		Data:      msg,
 	}
 	self.conn.Write(&c)
 	return self.conn.Flush()
@@ -118,11 +144,11 @@ func (self *ConnClient) writeConnectMsg() error {
 	event["flashVer"] = "FMS.3.1"
 	event["tcUrl"] = self.tcurl
 	self.curcmdName = cmdConnect
-	log.Println("v", reflect.ValueOf(event).Kind())
+
 	if err := self.writeMsg(cmdConnect, self.transID, event); err != nil {
 		return err
 	}
-	return self.handleMsg()
+	return self.readRespMsg()
 }
 
 func (self *ConnClient) writeCreateStreamMsg() error {
@@ -131,27 +157,25 @@ func (self *ConnClient) writeCreateStreamMsg() error {
 	if err := self.writeMsg(cmdCreateStream, self.transID, nil); err != nil {
 		return err
 	}
-	return self.handleMsg()
+	return self.readRespMsg()
 }
 
 func (self *ConnClient) writePublishMsg() error {
 	self.transID++
-	self.streamid = 1
 	self.curcmdName = cmdPublish
 	if err := self.writeMsg(cmdPublish, self.transID, nil, self.title, publishLive); err != nil {
 		return err
 	}
-	return self.handleMsg()
+	return self.readRespMsg()
 }
 
 func (self *ConnClient) writePlayMsg() error {
 	self.transID++
-	self.streamid = 1
 	self.curcmdName = cmdPlay
 	if err := self.writeMsg(cmdPlay, 0, nil, self.title); err != nil {
 		return err
 	}
-	return self.handleMsg()
+	return self.readRespMsg()
 }
 
 func (self *ConnClient) Start(url string, method string) error {
@@ -208,11 +232,9 @@ func (self *ConnClient) Start(url string, method string) error {
 	if err := self.conn.HandshakeClient(); err != nil {
 		return err
 	}
-
 	if err := self.writeConnectMsg(); err != nil {
 		return err
 	}
-
 	if err := self.writeCreateStreamMsg(); err != nil {
 		return err
 	}
@@ -242,8 +264,7 @@ func (self *ConnClient) Write(c ChunkStream) error {
 }
 
 func (self *ConnClient) Read(c *ChunkStream) (err error) {
-	err = self.conn.Read(c)
-	return err
+	return self.conn.Read(c)
 }
 
 func (self *ConnClient) GetInfo() (app string, name string, url string) {

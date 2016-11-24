@@ -176,8 +176,8 @@ func (self *Conn) HandshakeServer() (err error) {
 		hsCreate01(S0S1, srvtime, srvver, hsServerPartialKey)
 		hsCreate2(S2, digest)
 	} else {
-		copy(S1, C1)
-		copy(S2, C2)
+		copy(S1, C2)
+		copy(S2, C1)
 	}
 
 	// > S0S1S2

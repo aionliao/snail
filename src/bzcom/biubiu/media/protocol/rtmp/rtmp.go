@@ -5,6 +5,7 @@ import (
 	"bzcom/biubiu/media/container/flv"
 	"bzcom/biubiu/media/protocol/rtmp/core"
 	"bzcom/biubiu/media/utils/uid"
+	"log"
 	"net"
 	"time"
 )
@@ -60,6 +61,7 @@ func (self *Server) Serve(listener net.Listener) (err error) {
 			return
 		}
 		conn := core.NewConn(netconn, 4*1024)
+		log.Println("new rtmp connect remote:", conn.RemoteAddr().String(), "local:", conn.LocalAddr().String())
 		go self.handleConn(conn)
 	}
 }
@@ -68,12 +70,14 @@ func (self *Server) handleConn(conn *core.Conn) error {
 	conn.SetDeadline(time.Now().Add(time.Second * 30))
 	if err := conn.HandshakeServer(); err != nil {
 		conn.Close()
+		log.Println("handleConn HandshakeServer err:", err)
 		return err
 	}
 	conn.SetDeadline(time.Time{})
 	connServer := core.NewConnServer(conn)
 
 	if err := connServer.ReadMsg(); err != nil {
+		log.Println("handleConn read msg err:", err)
 		return err
 	}
 	if connServer.IsPublisher() {

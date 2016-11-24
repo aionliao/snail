@@ -1,17 +1,19 @@
 package pool
 
 type Pool struct {
+	pos int
 	buf []byte
 }
 
-const maxpoolsize = 2 * 1024 * 1024
+const maxpoolsize = 1 * 1024 * 1024
 
 func (self *Pool) Get(size int) []byte {
-	if len(self.buf) < size {
+	if maxpoolsize-self.pos < size {
+		self.pos = 0
 		self.buf = make([]byte, maxpoolsize)
 	}
-	b := self.buf[:size]
-	self.buf = self.buf[size:]
+	b := self.buf[self.pos : self.pos+size]
+	self.pos += size
 	return b
 }
 

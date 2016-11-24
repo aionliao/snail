@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"bzcom/biubiu/media/av"
 	"bzcom/biubiu/media/protocol/amf"
+	"errors"
 	"io"
 	"log"
 )
@@ -12,6 +13,10 @@ var (
 	publishLive   = "live"
 	publishRecord = "record"
 	publishAppend = "append"
+)
+
+var (
+	ErrReq = errors.New("req error")
 )
 
 var (
@@ -57,85 +62,79 @@ type PublishInfo struct {
 
 type ConnServer struct {
 	done          bool
-	err           error
 	streamID      int
 	isPublisher   bool
 	conn          *Conn
+	transactionID int
 	ConnInfo      ConnectInfo
 	PublishInfo   PublishInfo
 	decoder       *amf.Decoder
 	encoder       *amf.Encoder
-	transactionID float64
+	bytesw        *bytes.Buffer
 }
 
 func NewConnServer(conn *Conn) *ConnServer {
 	return &ConnServer{
 		conn:     conn,
 		streamID: 1,
+		bytesw:   bytes.NewBuffer(nil),
 		decoder:  &amf.Decoder{},
 		encoder:  &amf.Encoder{},
 	}
 }
 
 func (self *ConnServer) writeMsg(csid, streamID uint32, args ...interface{}) error {
-	w := bytes.NewBuffer(nil)
+	self.bytesw.Reset()
 	for _, v := range args {
-		if _, err := self.encoder.Encode(w, v, amf.AMF0); err != nil {
+		if _, err := self.encoder.Encode(self.bytesw, v, amf.AMF0); err != nil {
 			return err
 		}
 	}
+	msg := self.bytesw.Bytes()
 	c := ChunkStream{
 		Format:    0,
 		CSID:      csid,
 		Timestamp: 0,
 		TypeID:    20,
 		StreamID:  streamID,
-		Length:    uint32(len(w.Bytes())),
-		Data:      w.Bytes(),
+		Length:    uint32(len(msg)),
+		Data:      msg,
 	}
 	self.conn.Write(&c)
 	return self.conn.Flush()
 }
 
-func (self *ConnServer) connect(r io.Reader, amfType amf.Version) error {
-	var err error
-	var transid, objmap interface{}
-
-	transid, err = self.decoder.Decode(r, amfType)
-	if err != nil {
-		if err == io.EOF {
-			return nil
+func (self *ConnServer) connect(vs []interface{}) error {
+	for _, v := range vs {
+		switch v.(type) {
+		case string:
+		case float64:
+			id := int(v.(float64))
+			if id != 1 {
+				return ErrReq
+			}
+			self.transactionID = id
+		case amf.Object:
+			obimap := v.(amf.Object)
+			if app, ok := obimap["app"]; ok {
+				self.ConnInfo.App = app.(string)
+			}
+			if flashVer, ok := obimap["flashVer"]; ok {
+				self.ConnInfo.Flashver = flashVer.(string)
+			}
+			if tcurl, ok := obimap["tcUrl"]; ok {
+				self.ConnInfo.TcUrl = tcurl.(string)
+			}
 		}
-		return err
 	}
-	self.transactionID = transid.(float64)
+	return nil
+}
 
-	objmap, err = self.decoder.Decode(r, amfType)
-	if err != nil {
-		if err == io.EOF {
-			return nil
-		}
-		return err
-	}
-	infoMap := objmap.(amf.Object)
-	v, ok := infoMap["app"]
-	if ok {
-		self.ConnInfo.App = v.(string)
-	}
-	v, ok = infoMap["flashVer"]
-	if ok {
-		self.ConnInfo.Flashver = v.(string)
-	}
-	v, ok = infoMap["tcUrl"]
-	if ok {
-		self.ConnInfo.TcUrl = v.(string)
-	}
-	v, ok = infoMap["objectEncoding"]
-	if ok {
-		self.ConnInfo.ObjectEncoding = int(v.(float64))
-	}
+func (self *ConnServer) releaseStream(vs []interface{}) error {
+	return nil
+}
 
-	// TODO: Optional User  Arguments
+func (self *ConnServer) fcPublish(vs []interface{}) error {
 	return nil
 }
 
@@ -159,19 +158,15 @@ func (self *ConnServer) connectResp(cur *ChunkStream) error {
 	return self.writeMsg(cur.CSID, cur.StreamID, "_result", self.transactionID, resp, event)
 }
 
-func (self *ConnServer) createStream(r io.Reader, amfType amf.Version) error {
-	var err error
-	var transid interface{}
-
-	transid, err = self.decoder.Decode(r, amfType)
-	if err != nil {
-		if err == io.EOF {
-			return nil
+func (self *ConnServer) createStream(vs []interface{}) error {
+	for _, v := range vs {
+		switch v.(type) {
+		case string:
+		case float64:
+			self.transactionID = int(v.(float64))
+		case amf.Object:
 		}
-		return err
 	}
-	self.transactionID = transid.(float64)
-
 	return nil
 }
 
@@ -179,48 +174,21 @@ func (self *ConnServer) createStreamResp(cur *ChunkStream) error {
 	return self.writeMsg(cur.CSID, cur.StreamID, "_result", self.transactionID, nil, self.streamID)
 }
 
-func (self *ConnServer) publishOrPlay(r io.Reader, cmdName string, amfType amf.Version) error {
-	var err error
-	var transid, name, pType interface{}
-
-	transid, err = self.decoder.Decode(r, amfType)
-	if err != nil {
-		if err == io.EOF {
-			return nil
+func (self *ConnServer) publishOrPlay(vs []interface{}) error {
+	for k, v := range vs {
+		switch v.(type) {
+		case string:
+			if k == 2 {
+				self.PublishInfo.Name = v.(string)
+			} else if k == 3 {
+				self.PublishInfo.Type = v.(string)
+			}
+		case float64:
+			id := int(v.(float64))
+			self.transactionID = id
+		case amf.Object:
 		}
-		return err
 	}
-	self.transactionID = transid.(float64)
-
-	_, err = self.decoder.Decode(r, amfType)
-	if err != nil {
-		if err == io.EOF {
-			return nil
-		}
-		return err
-	}
-
-	name, err = self.decoder.Decode(r, amfType)
-	if err != nil {
-		if err == io.EOF {
-			return nil
-		}
-		return err
-	}
-	self.PublishInfo.Name = name.(string)
-
-	if cmdName == cmdPlay {
-		return nil
-	}
-
-	pType, err = self.decoder.Decode(r, amfType)
-	if err != nil {
-		if err == io.EOF {
-			return nil
-		}
-		return err
-	}
-	self.PublishInfo.Type = pType.(string)
 
 	return nil
 }
@@ -275,32 +243,31 @@ func (self *ConnServer) handleCmdMsg(c *ChunkStream) error {
 		c.Data = c.Data[1:]
 	}
 	r := bytes.NewReader(c.Data)
-	v, err := self.decoder.Decode(r, amf.Version(amfType))
-	if err != nil {
-		if err == io.EOF {
-			return nil
-		}
+	vs, err := self.decoder.DecodeBatch(r, amf.Version(amfType))
+	if err != nil && err != io.EOF {
 		return err
 	}
-	switch v.(type) {
+	log.Println("vs:", vs)
+
+	switch vs[0].(type) {
 	case string:
-		switch v.(string) {
+		switch vs[0].(string) {
 		case cmdConnect:
-			if err = self.connect(r, amf.Version(amfType)); err != nil {
+			if err = self.connect(vs[1:]); err != nil {
 				return err
 			}
 			if err = self.connectResp(c); err != nil {
 				return err
 			}
 		case cmdCreateStream:
-			if err = self.createStream(r, amf.Version(amfType)); err != nil {
+			if err = self.createStream(vs[1:]); err != nil {
 				return err
 			}
 			if err = self.createStreamResp(c); err != nil {
 				return err
 			}
 		case cmdPublish:
-			if err = self.publishOrPlay(r, cmdPublish, amf.Version(amfType)); err != nil {
+			if err = self.publishOrPlay(vs[1:]); err != nil {
 				return err
 			}
 			if err = self.publishResp(c); err != nil {
@@ -309,7 +276,7 @@ func (self *ConnServer) handleCmdMsg(c *ChunkStream) error {
 			self.done = true
 			self.isPublisher = true
 		case cmdPlay:
-			if err = self.publishOrPlay(r, cmdPlay, amf.Version(amfType)); err != nil {
+			if err = self.publishOrPlay(vs[1:]); err != nil {
 				return err
 			}
 			if err = self.playResp(c); err != nil {
@@ -318,11 +285,13 @@ func (self *ConnServer) handleCmdMsg(c *ChunkStream) error {
 			self.done = true
 			self.isPublisher = false
 		case cmdFcpublish:
+			self.fcPublish(vs)
 		case cmdReleaseStream:
+			self.releaseStream(vs)
 		case cmdFCUnpublish:
 		case cmdDeleteStream:
 		default:
-			log.Println("no support command=", v.(string))
+			log.Println("no support command=", vs[0].(string))
 		}
 	}
 
@@ -330,11 +299,10 @@ func (self *ConnServer) handleCmdMsg(c *ChunkStream) error {
 }
 
 func (self *ConnServer) ReadMsg() error {
+	var c ChunkStream
 	for {
-		var c ChunkStream
-		self.err = self.conn.Read(&c)
-		if self.err != nil {
-			return self.err
+		if err := self.conn.Read(&c); err != nil {
+			return err
 		}
 		switch c.TypeID {
 		case 20, 17:

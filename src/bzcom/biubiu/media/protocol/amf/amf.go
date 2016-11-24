@@ -6,6 +6,18 @@ import (
 	"io"
 )
 
+func (d *Decoder) DecodeBatch(r io.Reader, ver Version) (ret []interface{}, err error) {
+	var v interface{}
+	for {
+		v, err = d.Decode(r, ver)
+		if err != nil {
+			break
+		}
+		ret = append(ret, v)
+	}
+	return
+}
+
 func (d *Decoder) Decode(r io.Reader, ver Version) (interface{}, error) {
 	switch ver {
 	case 0:

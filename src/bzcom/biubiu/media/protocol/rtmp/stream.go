@@ -59,19 +59,15 @@ func (self *RtmpStream) HandleWriter(w av.WriteCloser) {
 }
 
 func (self *RtmpStream) CheckAlive() {
-	ticker := time.NewTicker(time.Second * 5)
 	for {
-		select {
-		case <-ticker.C:
-			self.lock.Lock()
-			for k, v := range self.streams {
-				if v.CheckAlive() == 0 {
-					delete(self.streams, k)
-				}
+		time.Sleep(time.Second * 5)
+		self.lock.Lock()
+		for k, v := range self.streams {
+			if v.CheckAlive() == 0 {
+				delete(self.streams, k)
 			}
-			self.lock.Unlock()
-		default:
 		}
+		self.lock.Unlock()
 	}
 }
 
