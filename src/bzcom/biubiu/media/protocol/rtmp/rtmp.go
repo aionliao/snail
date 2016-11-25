@@ -77,6 +77,7 @@ func (self *Server) handleConn(conn *core.Conn) error {
 	connServer := core.NewConnServer(conn)
 
 	if err := connServer.ReadMsg(); err != nil {
+		conn.Close()
 		log.Println("handleConn read msg err:", err)
 		return err
 	}
@@ -89,7 +90,9 @@ func (self *Server) handleConn(conn *core.Conn) error {
 		}
 	} else {
 		writer := NewVirWriter(connServer)
+
 		self.handler.HandleWriter(writer)
+		log.Println("NewVirWriter after2")
 	}
 
 	return nil
@@ -112,9 +115,21 @@ type VirWriter struct {
 }
 
 func NewVirWriter(conn StreamReadWriteCloser) *VirWriter {
-	return &VirWriter{
+	ret := &VirWriter{
 		conn:    conn,
 		RWBaser: av.NewRWBaser(time.Second * 10),
+	}
+	go ret.Check()
+	return ret
+}
+
+func (self *VirWriter) Check() {
+	var c core.ChunkStream
+	for {
+		if err := self.conn.Read(&c); err != nil {
+			self.conn.Close(err)
+			return
+		}
 	}
 }
 

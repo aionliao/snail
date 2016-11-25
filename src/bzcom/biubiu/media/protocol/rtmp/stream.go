@@ -4,6 +4,7 @@ import (
 	"bzcom/biubiu/media/av"
 	"bzcom/biubiu/media/protocol/rtmp/cachev1"
 	"errors"
+	"log"
 	"sync"
 	"time"
 )
@@ -54,8 +55,8 @@ func (self *RtmpStream) HandleWriter(w av.WriteCloser) {
 		s = NewStream()
 		self.streams[info.Key] = s
 	}
-	s.AddWriter(w)
 	self.lock.Unlock()
+	s.AddWriter(w)
 }
 
 func (self *RtmpStream) CheckAlive() {
@@ -111,8 +112,8 @@ func (self *Stream) Copy(dst *Stream) {
 func (self *Stream) AddReader(r av.ReadCloser) {
 	self.lock.Lock()
 	self.r = r
-	self.TransStart()
 	self.lock.Unlock()
+	self.TransStart()
 }
 
 func (self *Stream) AddWriter(w av.WriteCloser) {
@@ -147,12 +148,14 @@ func (self *Stream) TransStart() {
 			for k, v := range self.ws {
 				if !v.init {
 					if err = self.cache.Send(v.w); err != nil {
+						log.Println("2err:", err)
 						delete(self.ws, k)
 						continue
 					}
 					v.init = true
 				} else {
 					if err = v.w.Write(p); err != nil {
+						log.Println("1err:", err)
 						delete(self.ws, k)
 					}
 				}

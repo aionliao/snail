@@ -8,10 +8,23 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
+	"syscall"
 )
+
+func catchSignal() {
+	sig := make(chan os.Signal)
+	signal.Notify(sig, syscall.SIGUSR1)
+	<-sig
+	log.Println("recieved signal!")
+	panic("")
+}
 
 // this is for demo
 func main() {
+
+	go catchSignal()
 
 	go func() {
 		log.Println(http.ListenAndServe(":8089", nil))
@@ -19,7 +32,7 @@ func main() {
 
 	stream := rtmp.NewRtmpStream()
 
-	rtmplisten, err := net.Listen("tcp", ":2935")
+	rtmplisten, err := net.Listen("tcp", ":1935")
 	if err != nil {
 		log.Fatal(err)
 	}

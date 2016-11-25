@@ -4,17 +4,13 @@ package cachev1
 implement a easy's cache which contains gop, seq, metadata
 */
 
-import (
-	"bzcom/biubiu/media/av"
-	"sync"
-)
+import "bzcom/biubiu/media/av"
 
 type Cache struct {
 	gop                *GopCache
 	videoSeq           *SpecialCache
 	audioSeq           *SpecialCache
 	metadata           *SpecialCache
-	lock               sync.RWMutex
 	hasSefaultMinTs    bool
 	lastVideoTimestamp uint32
 	lastAudioTimestamp uint32

@@ -125,6 +125,9 @@ func (self *ConnServer) connect(vs []interface{}) error {
 			if tcurl, ok := obimap["tcUrl"]; ok {
 				self.ConnInfo.TcUrl = tcurl.(string)
 			}
+			if encoding, ok := obimap["objectEncoding"]; ok {
+				self.ConnInfo.ObjectEncoding = int(encoding.(float64))
+			}
 		}
 	}
 	return nil
@@ -233,7 +236,7 @@ func (self *ConnServer) playResp(cur *ChunkStream) error {
 	if err := self.writeMsg(cur.CSID, cur.StreamID, "onStatus", 0, nil, event); err != nil {
 		return err
 	}
-
+	log.Println("playResp")
 	return self.conn.Flush()
 }
 
@@ -247,8 +250,7 @@ func (self *ConnServer) handleCmdMsg(c *ChunkStream) error {
 	if err != nil && err != io.EOF {
 		return err
 	}
-	log.Println("vs:", vs)
-
+	log.Println("read req:", vs)
 	switch vs[0].(type) {
 	case string:
 		switch vs[0].(string) {
@@ -284,6 +286,7 @@ func (self *ConnServer) handleCmdMsg(c *ChunkStream) error {
 			}
 			self.done = true
 			self.isPublisher = false
+			log.Println("playResp done")
 		case cmdFcpublish:
 			self.fcPublish(vs)
 		case cmdReleaseStream:
