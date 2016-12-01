@@ -2,9 +2,8 @@ package rtmp
 
 import (
 	"bzcom/biubiu/media/av"
-	"bzcom/biubiu/media/protocol/rtmp/cachev1"
+	"bzcom/biubiu/media/protocol/rtmp/cache"
 	"errors"
-	"log"
 	"sync"
 	"time"
 )
@@ -75,7 +74,7 @@ func (self *RtmpStream) CheckAlive() {
 type Stream struct {
 	isStart bool
 	lock    sync.RWMutex
-	cache   *cachev1.Cache
+	cache   *cache.Cache
 	r       av.ReadCloser
 	ws      map[string]*PackWriterCloser
 }
@@ -87,7 +86,7 @@ type PackWriterCloser struct {
 
 func NewStream() *Stream {
 	return &Stream{
-		cache: cachev1.NewCache(),
+		cache: cache.NewCache(),
 		ws:    make(map[string]*PackWriterCloser),
 	}
 }
@@ -148,14 +147,12 @@ func (self *Stream) TransStart() {
 			for k, v := range self.ws {
 				if !v.init {
 					if err = self.cache.Send(v.w); err != nil {
-						log.Println("2err:", err)
 						delete(self.ws, k)
 						continue
 					}
 					v.init = true
 				} else {
 					if err = v.w.Write(p); err != nil {
-						log.Println("1err:", err)
 						delete(self.ws, k)
 					}
 				}

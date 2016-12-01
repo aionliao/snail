@@ -169,7 +169,7 @@ const (
    +------------------------------+-------------------------
    Pay load for the ‘User Control Message’.
 */
-func (self *Conn) initUserControlMsg(eventType, buflen uint32) ChunkStream {
+func (self *Conn) userControlMsg(eventType, buflen uint32) ChunkStream {
 	var ret ChunkStream
 	buflen += 2
 	ret = ChunkStream{
@@ -186,7 +186,7 @@ func (self *Conn) initUserControlMsg(eventType, buflen uint32) ChunkStream {
 }
 
 func (self *Conn) SetBegin() {
-	ret := self.initUserControlMsg(streamBegin, 4)
+	ret := self.userControlMsg(streamBegin, 4)
 	for i := 0; i < 4; i++ {
 		ret.Data[2+i] = byte(1 >> uint32((3-i)*8) & 0xff)
 	}
@@ -194,7 +194,7 @@ func (self *Conn) SetBegin() {
 }
 
 func (self *Conn) SetRecorded() {
-	ret := self.initUserControlMsg(streamIsRecorded, 4)
+	ret := self.userControlMsg(streamIsRecorded, 4)
 	for i := 0; i < 4; i++ {
 		ret.Data[2+i] = byte(1 >> uint32((3-i)*8) & 0xff)
 	}

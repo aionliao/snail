@@ -236,7 +236,6 @@ func (self *ConnServer) playResp(cur *ChunkStream) error {
 	if err := self.writeMsg(cur.CSID, cur.StreamID, "onStatus", 0, nil, event); err != nil {
 		return err
 	}
-	log.Println("playResp")
 	return self.conn.Flush()
 }
 
@@ -250,7 +249,7 @@ func (self *ConnServer) handleCmdMsg(c *ChunkStream) error {
 	if err != nil && err != io.EOF {
 		return err
 	}
-	log.Println("read req:", vs)
+	log.Println("rtmp req:", vs)
 	switch vs[0].(type) {
 	case string:
 		switch vs[0].(string) {
@@ -277,6 +276,7 @@ func (self *ConnServer) handleCmdMsg(c *ChunkStream) error {
 			}
 			self.done = true
 			self.isPublisher = true
+			log.Println("handle publish req done")
 		case cmdPlay:
 			if err = self.publishOrPlay(vs[1:]); err != nil {
 				return err
@@ -286,7 +286,7 @@ func (self *ConnServer) handleCmdMsg(c *ChunkStream) error {
 			}
 			self.done = true
 			self.isPublisher = false
-			log.Println("playResp done")
+			log.Println("handle play req done")
 		case cmdFcpublish:
 			self.fcPublish(vs)
 		case cmdReleaseStream:

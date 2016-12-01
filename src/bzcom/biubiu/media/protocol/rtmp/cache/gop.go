@@ -1,54 +1,12 @@
-package cachev1
+package cache
 
 import (
 	"bzcom/biubiu/media/av"
 	"errors"
 )
 
-type checker struct {
-	start    bool
-	getVideo bool
-	curTs    uint32
-	firstTs  uint32
-	interval uint32
-}
-
-func newChecker() *checker {
-	return &checker{
-		interval: 5 * 1000,
-	}
-}
-
-func (self *checker) do(p *av.Packet) bool {
-	ok := false
-	self.curTs = p.TimeStamp
-
-	if !self.start {
-		ok = true
-		self.start = true
-	} else {
-		if p.IsVideo {
-			self.getVideo = true
-			vh := p.Header.(av.VideoPacketHeader)
-			if vh.IsKeyFrame() && !vh.IsSeq() {
-				ok = true
-			}
-		}
-		v := self.curTs - self.firstTs
-		if !self.getVideo && v >= self.interval {
-			ok = true
-		}
-	}
-	if ok {
-		self.getVideo = false
-		self.firstTs = self.curTs
-	}
-
-	return ok
-}
-
 var (
-	maxGOPSzie   int = 1024
+	maxGOPCap   int = 1024
 	ErrGopTooBig     = errors.New("gop to big")
 )
 
@@ -60,7 +18,7 @@ type array struct {
 func newArray() *array {
 	ret := &array{
 		index:   0,
-		packets: make([]av.Packet, maxGOPSzie),
+		packets: make([]av.Packet,0, maxGOPCap),
 	}
 	return ret
 }
@@ -71,7 +29,7 @@ func (self *array) reset() {
 }
 
 func (self *array) write(packet av.Packet) error {
-	if self.index >= maxGOPSzie {
+	if self.index >= maxGOPCap {
 		return ErrGopTooBig
 	}
 	self.packets = append(self.packets, packet)
@@ -96,13 +54,11 @@ type GopCache struct {
 	count     int
 	nextindex int
 	gops      []*array
-	check     *checker
 }
 
 func NewGopCache(num int) *GopCache {
 	return &GopCache{
 		count: num,
-		check: newChecker(),
 		gops:  make([]*array, num),
 	}
 }
@@ -128,7 +84,13 @@ func (self *GopCache) writeToArray(chunk av.Packet, startNew bool) error {
 }
 
 func (self *GopCache) Write(p av.Packet) {
-	ok := self.check.do(&p)
+	var ok bool
+	if p.IsVideo {
+		vh := p.Header.(av.VideoPacketHeader)
+		if vh.IsKeyFrame() && !vh.IsSeq() {
+			ok = true
+		}
+	}
 	if ok || self.start {
 		self.start = true
 		self.writeToArray(p, ok)

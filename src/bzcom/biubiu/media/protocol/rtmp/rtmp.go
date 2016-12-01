@@ -61,7 +61,7 @@ func (self *Server) Serve(listener net.Listener) (err error) {
 			return
 		}
 		conn := core.NewConn(netconn, 4*1024)
-		log.Println("new rtmp connect remote:", conn.RemoteAddr().String(), "local:", conn.LocalAddr().String())
+		log.Println("connect remote:", conn.RemoteAddr().String(), "local:", conn.LocalAddr().String())
 		go self.handleConn(conn)
 	}
 }
@@ -90,9 +90,7 @@ func (self *Server) handleConn(conn *core.Conn) error {
 		}
 	} else {
 		writer := NewVirWriter(connServer)
-
 		self.handler.HandleWriter(writer)
-		log.Println("NewVirWriter after2")
 	}
 
 	return nil

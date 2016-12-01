@@ -1,4 +1,4 @@
-package cachev1
+package cache
 
 import (
 	"bytes"

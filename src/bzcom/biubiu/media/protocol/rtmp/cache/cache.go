@@ -1,19 +1,13 @@
-package cachev1
-
-/***
-implement a easy's cache which contains gop, seq, metadata
-*/
+package cache
 
 import "bzcom/biubiu/media/av"
+
 
 type Cache struct {
 	gop                *GopCache
 	videoSeq           *SpecialCache
 	audioSeq           *SpecialCache
 	metadata           *SpecialCache
-	hasSefaultMinTs    bool
-	lastVideoTimestamp uint32
-	lastAudioTimestamp uint32
 }
 
 func NewCache() *Cache {
@@ -32,7 +26,8 @@ func (self *Cache) Write(p av.Packet) {
 	} else {
 		if !p.IsVideo {
 			ah := p.Header.(av.AudioPacketHeader)
-			if ah.SoundFormat() == av.SOUND_AAC && ah.AACPacketType() == av.AAC_SEQHDR {
+			if ah.SoundFormat() == av.SOUND_AAC &&
+			   ah.AACPacketType() == av.AAC_SEQHDR {
 				self.audioSeq.Write(p)
 				return
 			}
