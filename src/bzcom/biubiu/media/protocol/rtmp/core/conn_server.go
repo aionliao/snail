@@ -100,7 +100,7 @@ func (self *ConnServer) writeMsg(csid, streamID uint32, args ...interface{}) err
 		Length:    uint32(len(msg)),
 		Data:      msg,
 	}
-	self.conn.Write(&c)
+	self.conn.Write(c)
 	return self.conn.Flush()
 }
 
@@ -143,11 +143,11 @@ func (self *ConnServer) fcPublish(vs []interface{}) error {
 
 func (self *ConnServer) connectResp(cur *ChunkStream) error {
 	c := self.conn.NewWindowAckSize(2500000)
-	self.conn.Write(&c)
+	self.conn.Write(c)
 	c = self.conn.NewSetPeerBandwidth(2500000)
-	self.conn.Write(&c)
+	self.conn.Write(c)
 	c = self.conn.NewSetChunkSize(uint32(1024))
-	self.conn.Write(&c)
+	self.conn.Write(c)
 
 	resp := make(amf.Object)
 	resp["fmsVer"] = "FMS/3,0,1,123"
@@ -249,7 +249,6 @@ func (self *ConnServer) handleCmdMsg(c *ChunkStream) error {
 	if err != nil && err != io.EOF {
 		return err
 	}
-	log.Println("rtmp req:", vs)
 	switch vs[0].(type) {
 	case string:
 		switch vs[0].(string) {
@@ -333,7 +332,7 @@ func (self *ConnServer) Write(c ChunkStream) error {
 		}
 		c.Length = uint32(len(c.Data))
 	}
-	return self.conn.Write(&c)
+	return self.conn.Write(c)
 }
 
 func (self *ConnServer) Read(c *ChunkStream) (err error) {

@@ -142,8 +142,9 @@ func (self *Tag) ParseMeidaTagHeader(b []byte, isVideo bool) (n int, err error) 
 }
 
 func (self *Tag) parseAudioHeader(b []byte) (n int, err error) {
-	if len(b) < n+1 {
-		err = fmt.Errorf("invalid audiodata len=%d", len(b))
+	blen := len(b)
+	if blen < n+1 {
+		err = fmt.Errorf("invalid audiodata len=%d", blen)
 		return
 	}
 	flags := b[0]

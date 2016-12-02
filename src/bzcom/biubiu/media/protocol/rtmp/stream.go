@@ -74,9 +74,9 @@ func (self *RtmpStream) CheckAlive() {
 type Stream struct {
 	isStart bool
 	lock    sync.RWMutex
-	cache   *cache.Cache
+	cache   cache.Cache
 	r       av.ReadCloser
-	ws      map[string]*PackWriterCloser
+	ws      map[string]PackWriterCloser
 }
 
 type PackWriterCloser struct {
@@ -87,7 +87,7 @@ type PackWriterCloser struct {
 func NewStream() *Stream {
 	return &Stream{
 		cache: cache.NewCache(),
-		ws:    make(map[string]*PackWriterCloser),
+		ws:    make(map[string]PackWriterCloser),
 	}
 }
 
@@ -118,7 +118,7 @@ func (self *Stream) AddReader(r av.ReadCloser) {
 func (self *Stream) AddWriter(w av.WriteCloser) {
 	self.lock.Lock()
 	info := w.Info()
-	pw := &PackWriterCloser{
+	pw := PackWriterCloser{
 		w: w,
 	}
 	self.ws[info.UID] = pw
@@ -151,6 +151,7 @@ func (self *Stream) TransStart() {
 						continue
 					}
 					v.init = true
+					self.ws[k] = v
 				} else {
 					if err = v.w.Write(p); err != nil {
 						delete(self.ws, k)

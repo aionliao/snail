@@ -10,8 +10,8 @@ type Cache struct {
 	metadata           *SpecialCache
 }
 
-func NewCache() *Cache {
-	return &Cache{
+func NewCache() Cache {
+	return Cache{
 		gop:      NewGopCache(2),
 		videoSeq: NewSpecialCache(),
 		audioSeq: NewSpecialCache(),

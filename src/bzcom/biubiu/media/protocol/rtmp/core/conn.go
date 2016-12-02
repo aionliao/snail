@@ -74,7 +74,7 @@ func (self *Conn) Read(c *ChunkStream) error {
 	return nil
 }
 
-func (self *Conn) Write(c *ChunkStream) error {
+func (self *Conn) Write(c ChunkStream) error {
 	if c.TypeID == idSetChunkSize {
 		self.chunkSize = binary.BigEndian.Uint32(c.Data)
 	}
@@ -190,7 +190,7 @@ func (self *Conn) SetBegin() {
 	for i := 0; i < 4; i++ {
 		ret.Data[2+i] = byte(1 >> uint32((3-i)*8) & 0xff)
 	}
-	self.Write(&ret)
+	self.Write(ret)
 }
 
 func (self *Conn) SetRecorded() {
@@ -198,5 +198,5 @@ func (self *Conn) SetRecorded() {
 	for i := 0; i < 4; i++ {
 		ret.Data[2+i] = byte(1 >> uint32((3-i)*8) & 0xff)
 	}
-	self.Write(&ret)
+	self.Write(ret)
 }

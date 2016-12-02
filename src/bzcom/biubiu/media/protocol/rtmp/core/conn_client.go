@@ -133,7 +133,7 @@ func (self *ConnClient) writeMsg(args ...interface{}) error {
 		Length:    uint32(len(msg)),
 		Data:      msg,
 	}
-	self.conn.Write(&c)
+	self.conn.Write(c)
 	return self.conn.Flush()
 }
 
@@ -260,7 +260,7 @@ func (self *ConnClient) Write(c ChunkStream) error {
 		}
 		c.Length = uint32(len(c.Data))
 	}
-	return self.conn.Write(&c)
+	return self.conn.Write(c)
 }
 
 func (self *ConnClient) Read(c *ChunkStream) (err error) {
