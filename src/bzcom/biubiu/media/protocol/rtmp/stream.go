@@ -2,10 +2,11 @@ package rtmp
 
 import (
 	"bzcom/biubiu/media/av"
-	"bzcom/biubiu/media/protocol/rtmp/cache"
+	"bzcom/biubiu/media/protocol/rtmp/cache0"
 	"errors"
 	"sync"
 	"time"
+	"log"
 )
 
 var (
@@ -74,19 +75,54 @@ func (self *RtmpStream) CheckAlive() {
 type Stream struct {
 	isStart bool
 	lock    sync.RWMutex
-	cache   cache.Cache
+	cache   cache0.Cache
 	r       av.ReadCloser
 	ws      map[string]PackWriterCloser
 }
 
 type PackWriterCloser struct {
 	init bool
+	pos int
+	flag int
+	nextpos int
+	id int64
 	w    av.WriteCloser
+}
+
+func (self *PackWriterCloser)do(cache   cache0.Cache){
+	var p av.Packet
+	var err error
+	self.pos=-1
+	self.flag=3
+	for{
+		p, self.pos,self.id, err = cache.Read(self.pos,self.flag,self.id)
+		if err == cache0.Empty{
+			continue
+		}
+		log.Println("s",p.TimeStamp, p.IsVideo,p.IsMetadata,len(p.Data))
+		if p.IsMetadata{
+			self.flag=2
+		}else{
+			if !p.IsVideo {
+				ah := p.Header.(av.AudioPacketHeader)
+				if ah.SoundFormat() == av.SOUND_AAC &&
+				   ah.AACPacketType() == av.AAC_SEQHDR {
+					 self.flag=0
+				}
+			} else {
+				vh := p.Header.(av.VideoPacketHeader)
+				if vh.IsSeq() {
+					self.flag=1
+				}
+			}
+		}
+		self.w.Write(p)
+	}
 }
 
 func NewStream() *Stream {
 	return &Stream{
-		cache: cache.NewCache(),
+		cache: cache0.NewCache(),
 		ws:    make(map[string]PackWriterCloser),
 	}
 }
@@ -122,6 +158,7 @@ func (self *Stream) AddWriter(w av.WriteCloser) {
 		w: w,
 	}
 	self.ws[info.UID] = pw
+	go pw.do(self.cache)
 	self.lock.Unlock()
 }
 
@@ -142,23 +179,23 @@ func (self *Stream) TransStart() {
 			}
 			self.cache.Write(p)
 
-			self.lock.Lock()
-
-			for k, v := range self.ws {
-				if !v.init {
-					if err = self.cache.Send(v.w); err != nil {
-						delete(self.ws, k)
-						continue
-					}
-					v.init = true
-					self.ws[k] = v
-				} else {
-					if err = v.w.Write(p); err != nil {
-						delete(self.ws, k)
-					}
-				}
-			}
-			self.lock.Unlock()
+			//self.lock.Lock()
+			//
+			// for k, v := range self.ws {
+			// 	if !v.init {
+			// 		if err = self.cache.Send(v.w); err != nil {
+			// 			delete(self.ws, k)
+			// 			continue
+			// 		}
+			// 		v.init = true
+			// 		self.ws[k] = v
+			// 	} else {
+			// 		if err = v.w.Write(p); err != nil {
+			// 			delete(self.ws, k)
+			// 		}
+			// 	}
+			// }
+			// self.lock.Unlock()
 		}
 	}()
 }

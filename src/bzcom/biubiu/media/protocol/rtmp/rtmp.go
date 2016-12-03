@@ -148,7 +148,6 @@ func (self *VirWriter) Write(p av.Packet) error {
 			cs.TypeID = av.TAG_AUDIO
 		}
 	}
-
 	self.SetPreTime()
 	self.RecTimeStamp(cs.Timestamp, cs.TypeID)
 	return self.conn.Write(cs)
