@@ -1,7 +1,6 @@
 package cache
 
 import (
-	//"log"
 	"sync"
 	"bzcom/biubiu/media/av"
 )
@@ -13,6 +12,7 @@ const(
 
 type Cache struct {
 	mutex              sync.RWMutex
+	cond               *sync.Cond
 	gop                *GopCache
 	videoSeq           *SpecialCache
 	audioSeq           *SpecialCache
@@ -20,7 +20,9 @@ type Cache struct {
 }
 
 func NewCache() *Cache {
+	locker := new(sync.RWMutex)
 	return &Cache{
+		cond:     sync.NewCond(locker),
 		gop:      NewGopCache(defaultGopNum),
 		videoSeq: NewSpecialCache(),
 		audioSeq: NewSpecialCache(),
@@ -28,32 +30,44 @@ func NewCache() *Cache {
 	}
 }
 
+func (self *Cache)Wait(){
+	self.cond.L.Lock()
+	self.cond.Wait()
+	self.cond.L.Unlock()
+}
+
 
 func (self *Cache) Write(p av.Packet) {
 	self.mutex.Lock()
 	if p.IsMetadata {
 		self.metadata.Write(p)
-		goto end
+		self.mutex.Unlock()
+		return
 	} else {
 		if !p.IsVideo {
 			ah := p.Header.(av.AudioPacketHeader)
 			if ah.SoundFormat() == av.SOUND_AAC &&
 			   ah.AACPacketType() == av.AAC_SEQHDR {
 				self.audioSeq.Write(p)
-			  goto end
+				self.mutex.Unlock()
+				return
 			}
 		} else {
 			vh := p.Header.(av.VideoPacketHeader)
 			if vh.IsSeq() {
 				self.videoSeq.Write(p)
-				goto end
+				self.mutex.Unlock()
+				return
 			}
 		}
 	}
-	self.gop.Write(p)
 
-end:
+	invalid := self.gop.Write(p)
+
 	self.mutex.Unlock()
+	if invalid{
+	  self.cond.Broadcast()
+  }
 }
 
 func (self *Cache) Read(pos, flag int,curid int64)(packet av.Packet,nextpos int,id int64,err error){

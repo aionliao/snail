@@ -3,6 +3,7 @@ package cache
 import (
 	"bzcom/biubiu/media/av"
 	"errors"
+	"reflect"
 )
 
 var (
@@ -16,6 +17,19 @@ type SpecialCache struct {
 
 func NewSpecialCache() *SpecialCache {
 	return &SpecialCache{}
+}
+
+func (self *SpecialCache)Full()bool{
+	return self.full
+}
+
+func (self *SpecialCache)Equal(p av.Packet)bool{
+	myLen := len(self.p.Data)
+	inLen := len(p.Data)
+	if myLen == inLen{
+		return reflect.DeepEqual(p.Data, self.p.Data)
+	}
+	return false
 }
 
 func (self *SpecialCache) Write(p av.Packet) {

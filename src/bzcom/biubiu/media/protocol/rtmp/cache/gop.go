@@ -91,11 +91,11 @@ func (self *GopCache) writeToArray(p av.Packet, startNew bool) error {
 	}
 	ginc.write(p)
 	self.gops[self.index] = ginc
-
 	return nil
 }
 
-func (self *GopCache) Write(p av.Packet) {
+
+func (self *GopCache) Write(p av.Packet) (ret bool){
 	var ok bool
 	if p.IsVideo {
 		vh := p.Header.(av.VideoPacketHeader)
@@ -104,9 +104,11 @@ func (self *GopCache) Write(p av.Packet) {
 		}
 	}
 	if ok || self.start {
+		ret = true
 		self.start = true
 		self.writeToArray(p, ok)
 	}
+	return
 }
 
 func (self *GopCache)Read(pos int, curid int64)(packet av.Packet,nextpos int,id int64,err error){
@@ -133,12 +135,15 @@ func (self *GopCache)Read(pos int, curid int64)(packet av.Packet,nextpos int,id 
 	ginc = self.gops[index]
 	id = ginc.timeid()
 	if id < curid{
-		nextpos = pos
-		id = curid
-		err = Empty
-		return
+		goto empty
 	}
 	packet,nextindex,err = ginc.read(indexpos)
 	nextpos = index<<16 | nextindex
+	return
+
+empty:
+   nextpos = pos
+   id = curid
+   err = Empty
 	return
 }
