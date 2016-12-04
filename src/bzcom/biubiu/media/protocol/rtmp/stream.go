@@ -2,7 +2,7 @@ package rtmp
 
 import (
 	"bzcom/biubiu/media/av"
-	"bzcom/biubiu/media/protocol/rtmp/cache0"
+	"bzcom/biubiu/media/protocol/rtmp/cache"
 	"errors"
 	"sync"
 	"time"
@@ -34,7 +34,7 @@ func (self *RtmpStream) HandleReader(r av.ReadCloser) {
 		s = NewStream()
 		self.streams[info.Key] = s
 	} else {
-		s.TransStop()
+		s.ReaderStop()
 		id := s.ID()
 		if id != EmptyID && id != info.UID {
 			ns := NewStream()
@@ -73,33 +73,142 @@ func (self *RtmpStream) CheckAlive() {
 }
 
 type Stream struct {
-	isStart bool
 	lock    sync.RWMutex
-	cache   cache0.Cache
+	cache   *cache.Cache
 	r       av.ReadCloser
-	ws      map[string]PackWriterCloser
+	ws      map[string]mWriterCloser
 }
 
-type PackWriterCloser struct {
-	init bool
-	pos int
-	flag int
-	nextpos int
-	id int64
+type mWriterCloser struct {
 	w    av.WriteCloser
 }
 
-func (self *PackWriterCloser)do(cache   cache0.Cache){
-	var p av.Packet
-	var err error
-	self.pos=-1
-	self.flag=3
-	for{
-		p, self.pos,self.id, err = cache.Read(self.pos,self.flag,self.id)
-		if err == cache0.Empty{
+
+func NewStream() *Stream {
+	return &Stream{
+		ws:    make(map[string]mWriterCloser),
+	}
+}
+
+func (self *Stream) ID() string {
+	if self.r != nil {
+		return self.r.Info().UID
+	}
+	return EmptyID
+}
+
+func (self *Stream) Copy(dst *Stream) {
+	for _, v := range self.ws {
+		v.w.CalcBaseTimestamp()
+		dst.AddWriter(v.w)
+	}
+	dst.cache = self.cache
+}
+
+func (self *Stream) AddReader(r av.ReadCloser) {
+	self.r = r
+	if self.cache == nil{
+		self.cache = cache.NewCache()
+	}
+	sc := newSourceConsole(r, *self.cache)
+	go sc.do()
+}
+
+func (self *Stream) AddWriter(w av.WriteCloser) {
+	info := w.Info()
+	mw := mWriterCloser{
+		w: w,
+	}
+	self.ws[info.UID] = mw
+	if self.cache == nil{
+		self.cache = cache.NewCache()
+	}
+	wc := newDestConsole(w, *self.cache)
+	go wc.do()
+}
+
+func (self *Stream) ReaderStop() {
+	if  self.r != nil {
+		self.r.Close(errors.New("stop old"))
+		for k, v := range self.ws {
+			if v.w.Info().IsInterval() {
+				v.w.Close(errors.New("close"))
+				delete(self.ws, k)
+			}
+		}
+	}
+}
+
+func (self *Stream) CheckAlive() (n int) {
+	if self.r != nil  {
+		if self.r.Alive() {
+			n++
+		} else {
+			self.r.Close(errors.New("read timeout"))
+		}
+	}
+	for k, v := range self.ws {
+		if !v.w.Alive() {
+			delete(self.ws, k)
+			v.w.Close(errors.New("write timeout"))
 			continue
 		}
-		log.Println("s",p.TimeStamp, p.IsVideo,p.IsMetadata,len(p.Data))
+		n++
+	}
+	return
+}
+
+type sourceConsole struct{
+	cache  cache.Cache
+	r       av.ReadCloser
+}
+
+func newSourceConsole(r av.ReadCloser,c cache.Cache) sourceConsole{
+	return sourceConsole{
+		r:r,
+		cache:c,
+	}
+}
+
+func(self*sourceConsole)do(){
+	var p av.Packet
+	for {
+		err := self.r.Read(&p)
+		if err != nil {
+			log.Println("s close")
+			return
+		}
+		self.cache.Write(p)
+	}
+}
+
+
+type destConsole struct{
+	pos int
+	flag int
+	id int64
+	c cache.Cache
+	w av.WriteCloser
+}
+
+
+func newDestConsole( w av.WriteCloser,c cache.Cache) destConsole{
+	return destConsole{
+		w:w,
+		c:c,
+		pos:-1,
+		flag:3,
+	}
+}
+
+func (self *destConsole)do(){
+	var err error
+	var p av.Packet
+	for{
+		p, self.pos,self.id, err = self.c.Read(self.pos,self.flag,self.id)
+		if err == cache.Empty{
+			continue
+		}
 		if p.IsMetadata{
 			self.flag=2
 		}else{
@@ -116,126 +225,9 @@ func (self *PackWriterCloser)do(cache   cache0.Cache){
 				}
 			}
 		}
-		self.w.Write(p)
-	}
-}
-
-func NewStream() *Stream {
-	return &Stream{
-		cache: cache0.NewCache(),
-		ws:    make(map[string]PackWriterCloser),
-	}
-}
-
-func (self *Stream) ID() string {
-	if self.r != nil {
-		return self.r.Info().UID
-	}
-	return EmptyID
-}
-
-func (self *Stream) Copy(dst *Stream) {
-	self.lock.Lock()
-	for k, v := range self.ws {
-		delete(self.ws, k)
-		v.w.CalcBaseTimestamp()
-		dst.AddWriter(v.w)
-	}
-	self.lock.Unlock()
-}
-
-func (self *Stream) AddReader(r av.ReadCloser) {
-	self.lock.Lock()
-	self.r = r
-	self.lock.Unlock()
-	self.TransStart()
-}
-
-func (self *Stream) AddWriter(w av.WriteCloser) {
-	self.lock.Lock()
-	info := w.Info()
-	pw := PackWriterCloser{
-		w: w,
-	}
-	self.ws[info.UID] = pw
-	go pw.do(self.cache)
-	self.lock.Unlock()
-}
-
-func (self *Stream) TransStart() {
-	go func() {
-		self.isStart = true
-		var p av.Packet
-		for {
-			if !self.isStart {
-				self.closeInter()
-				return
-			}
-			err := self.r.Read(&p)
-			if err != nil {
-				self.closeInter()
-				self.isStart = false
-				return
-			}
-			self.cache.Write(p)
-
-			//self.lock.Lock()
-			//
-			// for k, v := range self.ws {
-			// 	if !v.init {
-			// 		if err = self.cache.Send(v.w); err != nil {
-			// 			delete(self.ws, k)
-			// 			continue
-			// 		}
-			// 		v.init = true
-			// 		self.ws[k] = v
-			// 	} else {
-			// 		if err = v.w.Write(p); err != nil {
-			// 			delete(self.ws, k)
-			// 		}
-			// 	}
-			// }
-			// self.lock.Unlock()
-		}
-	}()
-}
-
-func (self *Stream) TransStop() {
-	if self.isStart && self.r != nil {
-		self.r.Close(errors.New("stop old"))
-	}
-	self.isStart = false
-}
-
-func (self *Stream) CheckAlive() (n int) {
-	self.lock.Lock()
-	if self.r != nil && self.isStart {
-		if self.r.Alive() {
-			n++
-		} else {
-			self.r.Close(errors.New("read timeout"))
+		if err = self.w.Write(p);err !=nil{
+			log.Println("w close")
+			break
 		}
 	}
-	for k, v := range self.ws {
-		if !v.w.Alive() {
-			delete(self.ws, k)
-			v.w.Close(errors.New("write timeout"))
-			continue
-		}
-		n++
-	}
-	self.lock.Unlock()
-
-	return
-}
-
-func (self *Stream) closeInter() {
-	self.lock.Lock()
-	for k, v := range self.ws {
-		if v.w.Info().IsInterval() {
-			v.w.Close(errors.New("close"))
-			delete(self.ws, k)
-		}
-	}
-	self.lock.Unlock()
 }

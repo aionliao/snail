@@ -1,28 +1,13 @@
 package cache
 
 import (
-	"bytes"
 	"bzcom/biubiu/media/av"
-	"log"
-
-	"bzcom/biubiu/media/protocol/amf"
+	"errors"
 )
 
-const (
-	SetDataFrame string = "@setDataFrame"
-	OnMetaData   string = "onMetaData"
+var (
+	Empty = errors.New("empty")
 )
-
-var setFrameFrame []byte
-
-func init() {
-	b := bytes.NewBuffer(nil)
-	encoder := &amf.Encoder{}
-	if _, err := encoder.Encode(b, SetDataFrame, amf.AMF0); err != nil {
-		log.Fatal(err)
-	}
-	setFrameFrame = b.Bytes()
-}
 
 type SpecialCache struct {
 	full bool
@@ -38,9 +23,10 @@ func (self *SpecialCache) Write(p av.Packet) {
 	self.full = true
 }
 
-func (self *SpecialCache) Send(w av.WriteCloser) error {
-	if !self.full {
-		return nil
+
+func (self *SpecialCache)Read()(av.Packet,error){
+	if self.full{
+		return self.p, nil
 	}
-	return w.Write(self.p)
+	return self.p,Empty
 }
